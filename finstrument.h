@@ -12,7 +12,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/syscall.h>
-//#include <dlfcn.h>
+#include <pthread.h>
+#define __USE_GNU
+#include <dlfcn.h>
 #ifdef __cplsuplus
 #include <demangle.h>
 #endif
@@ -47,6 +49,8 @@ typedef struct tracer_ {
     RINGBUFFER **ring;
     int *threadIDTable;
     int lookupThreadIDNum;
+    pthread_mutex_t trace_write_mutex;
+    pthread_mutex_t trace_lookup_mutex;
 } TRACER;
 
 
@@ -59,12 +63,14 @@ typedef struct tracer_info {
     void *callsite;
 } TRACER_INFO;
 
-#define TRACE_FILE_PATH	"trace.dat"
+#define TRACE_FILE_PATH	            "trace.dat"
 #define MAX_BACK_TRACK_NUM			(5)
+#define MAX_LINE_LEN                (255)
 #ifndef _FINSTRUMENT_
 extern void tracer_backtrack(int fd);
+extern int changeTraceOption(TRACER_OPTION *tp);
 #endif
 
 #ifdef __cplsuplus
-}
+};
 #endif

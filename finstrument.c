@@ -3,12 +3,23 @@
 #include <stdlib.h>
 #include "finstrument.h"
 
+#ifdef __cplsuplus
+#define DMGL_PARAMS      (1 << 0)  /* Include function args */
+#define DMGL_ANSI        (1 << 1)  /* Include const, volatile, etc */
+#define DMGL_VERBOSE     (1 << 3)  /* Include implementation details.  */
+#define DMGL_TYPES       (1 << 4)  /* Also try to demangle type encodings. */
+extern "C" char *cplus_demangle(const char *mangled, int options);
+#endif
+
 /* Function prototypes with attributes */
+int print_traceinfo(int fd, TRACER_INFO *tr)
+  __attribute__ ((no_instrument_function));
+
 void write_traceinfo(void* this, void *callsite, char status)
-  __attribute__ ((no_instrument_function, constructor));
+  __attribute__ ((no_instrument_function));
 
 int write_ringbuffer(void* , size_t size)
-  __attribute__ ((no_instrument_function, constructor));
+  __attribute__ ((no_instrument_function));
 
 void main_constructor( void )
   __attribute__ ((no_instrument_function, constructor));
@@ -40,22 +51,14 @@ void app_signal_handler(int sig, siginfo_t *info, void *ctx)
 void tracer_backtrack(int fd)
   __attribute__ ((no_instrument_function));
 
-//
-//char* addr2name(void* address)
-//  __attribute__ ((no_instrument_function));
+const char* addr2name(void* address)
+  __attribute__ ((no_instrument_function));
+
 
 
 static int fd;
 static TRACER trace;
-#if 0
-char* addr2name(void* address) {
-  Dl_info dli;
-  if (0 != dladdr(address, &dli)) {
-    return dli.dli_sname;
-  }
-  return 0;
-}
-#endif
+
 
 int changeTraceOption(TRACER_OPTION *tp)
 {
@@ -113,6 +116,7 @@ int lookupThreadID(int thread_id)
 {
   int i;
 
+  pthread_mutex_lock(&trace.trace_lookup_mutex);
   for (int i = 0; i < trace.lookupThreadIDNum; i++) {
     if (trace.threadIDTable[i] == thread_id) {
       // found
@@ -125,6 +129,7 @@ int lookupThreadID(int thread_id)
   }
   trace.threadIDTable[trace.lookupThreadIDNum] = thread_id;
   trace.lookupThreadIDNum++;
+  pthread_mutex_unlock(&trace.trace_lookup_mutex);
   return trace.lookupThreadIDNum - 1;
 }
 
@@ -187,6 +192,55 @@ int  push_ringbuffer(RINGBUFFER *ring, void *data, size_t size)
   ring->top = (ring->top + 1) % ring->itemNumber;
 }
 
+const char* addr2name(void* address) {
+    Dl_info dli;
+    if (0 != dladdr(address, &dli)) {
+        return dli.dli_sname;
+    }
+    return 0;
+}
+
+int print_traceinfo(int fd, TRACER_INFO *tr)
+{
+  int err;
+  char buf[MAX_LINE_LEN + 1];
+#if 0
+  snprintf(buf, MAX_LINE_LEN, "%c %10d %16p %10ld %10ld %10ld %10ld\n",
+    tr->status,
+    tr->thread_id,
+    tr->this,
+    tr->time.tv_sec,
+    tr->time.tv_nsec,
+    tr->timeOfThreadProcess.tv_sec,
+    tr->timeOfThreadProcess.tv_sec
+    );
+#else
+#ifdef __cplsuplus
+  snprintf(buf, MAX_LINE_LEN, "%c %10d %s %10ld %10ld %10ld %10ld\n",
+    tr->status,
+    tr->thread_id,
+    cplus_demangle(addr2name(tr->this), DMGL_PARAMS | DMGL_ANSI | DMGL_TYPES),
+    tr->time.tv_sec,
+    tr->time.tv_nsec,
+    tr->timeOfThreadProcess.tv_sec,
+    tr->timeOfThreadProcess.tv_nsec
+    );
+#else
+  snprintf(buf, MAX_LINE_LEN, "%c %10d %s %10ld %10ld %10ld %10ld\n",
+    tr->status,
+    tr->thread_id,
+    addr2name(tr->this),
+    tr->time.tv_sec,
+    tr->time.tv_nsec,
+    tr->timeOfThreadProcess.tv_sec,
+    tr->timeOfThreadProcess.tv_nsec
+    );
+#endif
+#endif
+  err = write(fd, buf, strnlen(buf, MAX_LINE_LEN) + 1);
+  return err;
+}
+
 /**
  * @brief          push trace information to ringbuffer
  * @fn             write_traceinfo
@@ -201,8 +255,9 @@ void write_traceinfo(void* this, void *callsite, char status)
   int ret = 0;
 
   if (trace.option.use_timestamp == 1) {
-    if (trace.option.use_cputime == 1)
+    if (trace.option.use_cputime == 1) {
       clock_gettime( CLOCK_THREAD_CPUTIME_ID, &tr.timeOfThreadProcess);
+    }
     clock_gettime( CLOCK_MONOTONIC, &tr.time);
   }
   tr.thread_id = syscall(SYS_gettid);
@@ -212,10 +267,15 @@ void write_traceinfo(void* this, void *callsite, char status)
   if (trace.option.use_ringbuffer == 1) {
     push_ringbuffer(trace.ring[lookupThreadID(tr.thread_id)], &tr, sizeof(tr));
   } else {
+    pthread_mutex_lock(&trace.trace_write_mutex);
+    print_traceinfo(fd, &tr);
+    pthread_mutex_unlock(&trace.trace_write_mutex);
+#if 0
     ret = write(fd, &tr, sizeof(tr));
     if (ret < 0) {
       fprintf(stderr, "Error: writen(%d) %s\n", errno, strerror(errno));
     }
+#endif
   }
 }
 
@@ -228,10 +288,12 @@ void main_constructor( void )
 {
   struct sigaction sa_sig;
 
-  trace.option.use_ringbuffer = 0; // not used
-  trace.option.use_timestamp = 0; // not used
-  trace.option.max_threadNum = 100; // not used
   memset(&trace, 0, sizeof(TRACER));
+  trace.option.use_ringbuffer = 0; // not used
+  trace.option.use_timestamp = 1;
+  trace.option.max_threadNum = 100; // not used
+  trace.option.use_cputime = 1;
+  
   changeTraceOption(&trace.option);
 
   fd = open(TRACE_FILE_PATH, O_WRONLY|O_CREAT|O_TRUNC, S_IWUSR | S_IXUSR | S_IRUSR);
@@ -246,6 +308,8 @@ void main_constructor( void )
   if ( sigaction(SIGINT, &sa_sig, NULL) < 0 ) {
     exit(1);
   }
+  pthread_mutex_init(&trace.trace_write_mutex, NULL);
+  pthread_mutex_init(&trace.trace_lookup_mutex, NULL);
 }
 
 /**

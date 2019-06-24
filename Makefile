@@ -1,27 +1,24 @@
 #
-# Makefile for the trace utility.
-#
-# M. Tim Jones <mtj@mtjones.com>
+# Makefile
 #
 
 CC = gcc
 
-OBJS = trace.o symbols.o stack.o
+OBJS = test.o finstrument.o
+CFLAGS   = -rdynamic -g -finstrument-functions -Wall -pthread 
+LDFLAGS  = -rdynamic -lpthread -ldl -L.
+CPP_LDFLAGS  = -rdynamic -liberty -lpthread -ldl -L.
 
 all: pvtrace mytest
 
-mytest: test.c finstrument.c
-	gcc -o $@ -finstrument-functions test.c finstrument.c
+mytest: $(OBJS)
+	gcc -o $@ $(OBJS) $(LDFLAGS)
 
-
-pvtrace: $(OBJS)
-	gcc -o $@ $(OBJS)
+mycpptest: $(CPP_OBJS)
+	g++ -o $@ $(CPP_OBJS) $(CPP_LDFLAGS)
 
 .c.o:
-	$(CC) $(CFLAGS) -Wall -c $<
-
-install: pvtrace
-	cp pvtrace /usr/local/bin
+	$(CC) $(CFLAGS) -c $<
 
 clean:
-	rm -f pvtrace *.o
+	rm -f *.o
