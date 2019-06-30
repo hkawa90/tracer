@@ -1,0 +1,11 @@
+var fs = require('fs');
+var rs = fs.createReadStream('../../test/trace.dat');
+var readline = require('readline');
+
+var rl = readline.createInterface(rs, {});
+
+rl.on('line', function(line) {
+  // 受け取ったlineを逆順にして出力
+  console.log(line);
+});
+
