@@ -59,7 +59,7 @@ typedef struct tracer_info {
     struct timespec timeOfThreadProcess;
     int thread_id;
     char status;
-    void *this;
+    void *addr;
     void *callsite;
 } TRACER_INFO;
 

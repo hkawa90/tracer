@@ -15,7 +15,7 @@ extern "C" char *cplus_demangle(const char *mangled, int options);
 int print_traceinfo(int fd, TRACER_INFO *tr)
   __attribute__ ((no_instrument_function));
 
-void write_traceinfo(void* this, void *callsite, char status)
+void write_traceinfo(void* addr, void *callsite, char status)
   __attribute__ ((no_instrument_function));
 
 int write_ringbuffer(void* , size_t size)
@@ -219,7 +219,7 @@ int print_traceinfo(int fd, TRACER_INFO *tr)
   snprintf(buf, MAX_LINE_LEN, "%c %10d %s %10ld %10ld %10ld %10ld\n",
     tr->status,
     tr->thread_id,
-    cplus_demangle(addr2name(tr->this), DMGL_PARAMS | DMGL_ANSI | DMGL_TYPES),
+    cplus_demangle(addr2name(tr->addr), DMGL_PARAMS | DMGL_ANSI | DMGL_TYPES),
     tr->time.tv_sec,
     tr->time.tv_nsec,
     tr->timeOfThreadProcess.tv_sec,
@@ -229,7 +229,7 @@ int print_traceinfo(int fd, TRACER_INFO *tr)
   snprintf(buf, MAX_LINE_LEN, "%c %10d %s %10ld %10ld %10ld %10ld\n",
     tr->status,
     tr->thread_id,
-    addr2name(tr->this),
+    addr2name(tr->addr),
     tr->time.tv_sec,
     tr->time.tv_nsec,
     tr->timeOfThreadProcess.tv_sec,
@@ -237,7 +237,7 @@ int print_traceinfo(int fd, TRACER_INFO *tr)
     );
 #endif
 #endif
-  err = write(fd, buf, strnlen(buf, MAX_LINE_LEN) + 1);
+  err = write(fd, buf, strnlen(buf, MAX_LINE_LEN));
   return err;
 }
 
@@ -249,7 +249,7 @@ int print_traceinfo(int fd, TRACER_INFO *tr)
  * @param          (char status) exit or enter
  * @return         void
  */
-void write_traceinfo(void* this, void *callsite, char status)
+void write_traceinfo(void* addr, void *callsite, char status)
 {
   TRACER_INFO tr;
   int ret = 0;
@@ -262,7 +262,7 @@ void write_traceinfo(void* this, void *callsite, char status)
   }
   tr.thread_id = syscall(SYS_gettid);
   tr.status = status;
-  tr.this = this;
+  tr.addr = addr;
   tr.callsite = callsite;
   if (trace.option.use_ringbuffer == 1) {
     push_ringbuffer(trace.ring[lookupThreadID(tr.thread_id)], &tr, sizeof(tr));
@@ -323,15 +323,15 @@ void main_deconstructor( void )
 }
 
 
-void __cyg_profile_func_enter( void *this, void *callsite )
+void __cyg_profile_func_enter( void *addr, void *callsite )
 {
-  write_traceinfo(this, callsite, 'E');
+  write_traceinfo(addr, callsite, 'E');
 }
 
 
-void __cyg_profile_func_exit( void *this, void *callsite )
+void __cyg_profile_func_exit( void *addr, void *callsite )
 {
-  write_traceinfo(this, callsite, 'X');
+  write_traceinfo(addr, callsite, 'X');
 }
 
 void tracer_backtrack(int fd)
@@ -345,7 +345,7 @@ void tracer_backtrack(int fd)
       char buf[256];
       int pos = (trace.ring[idx]->top - i) % trace.option.max_ringbufferItemNum;
       TRACER_INFO *ti = (TRACER_INFO *)(trace.ring[idx]->buffer + trace.ring[idx]->itemSize * pos);
-      snprintf(buf, 255, "ThreadID:%d %p\n", ti->thread_id, ti->this);
+      snprintf(buf, 255, "ThreadID:%d %p\n", ti->thread_id, ti->addr);
       write(fd, buf, strnlen(buf, 255));
     }
   }
