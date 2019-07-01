@@ -92,13 +92,17 @@ function print_time(t)
   if (t.tv_sec === 0) {
     if ((t.tv_nsec / 1000) < 0) {
       // nano sec
-      r = t.tv_nsec.toString() + 'nsec';
+      r = t.tv_nsec.toString() + 'ns';
     } else {
       // ms
-      r = (t.tv_nsec / 1000).toString() + 'ms';
+      if ((t.tv_nsec / 1000000) < 0) {
+        r = (t.tv_nsec / 1000).toString() + 'μsec';
+      } else {
+        r = (t.tv_nsec / 1000).toString() + 'ms';
+      }
     }
   } else {
-    r = (t.tv_sec + (t.tv_nsec / 1000000)).toString() + 'sec';
+    r = (t.tv_sec + (t.tv_nsec / 1000000)).toString() + 's';
   }
   return r;
 }
@@ -221,24 +225,19 @@ rl.on('line', function(line) {
   } else { // status === 'X'
     var prev = stack[threadID].pop();
     var diffTime, diffCpuTime;
+    var flow = prev.prevFunc + '->' + func;
     diffTime = diff_timespec(prev.time, time);
     diffCpuTime = diff_timespec(prev.cputime, cputime);
-    call[threadID][prev.prevFunc + '->' + func].time = diffTime;
-    call[threadID][prev.prevFunc + '->' + func].cputime = diffCpuTime;
-    call[threadID][prev.prevFunc + '->' + func].sum_time =
-      add_timespec(call[threadID][prev.prevFunc + '->' + func].sum_time, diffTime);
-    call[threadID][prev.prevFunc + '->' + func].sum_cputime =
-      add_timespec(call[threadID][prev.prevFunc + '->' + func].sum_cputime, diffCpuTime);
-    call[threadID][prev.prevFunc + '->' + func].min_time =
-      min_timespec(call[threadID][prev.prevFunc + '->' + func].min_time, diffTime);
-    var s = min_timespec(call[threadID][prev.prevFunc + '->' + func].min_time, diffTime);
+    call[threadID][flow].time = diffTime;
+    call[threadID][flow].cputime = diffCpuTime;
+    call[threadID][flow].sum_time = add_timespec(call[threadID][flow].sum_time, diffTime);
+    call[threadID][flow].sum_cputime = add_timespec(call[threadID][flow].sum_cputime, diffCpuTime);
+    call[threadID][flow].min_time = min_timespec(call[threadID][flow].min_time, diffTime);
+    var s = min_timespec(call[threadID][flow].min_time, diffTime);
 
-    call[threadID][prev.prevFunc + '->' + func].min_cputime =
-      min_timespec(call[threadID][prev.prevFunc + '->' + func].min_cputime, diffCpuTime);
-    call[threadID][prev.prevFunc + '->' + func].max_time =
-      max_timespec(call[threadID][prev.prevFunc + '->' + func].max_time, diffTime);
-    call[threadID][prev.prevFunc + '->' + func].max_cputime =
-      max_timespec(call[threadID][prev.prevFunc + '->' + func].max_cputime, diffCpuTime);
+    call[threadID][flow].min_cputime = min_timespec(call[threadID][flow].min_cputime, diffCpuTime);
+    call[threadID][flow].max_time = max_timespec(call[threadID][flow].max_time, diffTime);
+    call[threadID][flow].max_cputime = max_timespec(call[threadID][flow].max_cputime, diffCpuTime);
     currentFunc[threadID] = prev.prevFunc;
   }
 });
@@ -247,7 +246,7 @@ rl.on('close', function() {
   for (var thread in call) {
     process.stdout.write('digraph call_graph_'+ thread+' {\n');
     for (var trace in call[thread]) {
-      process.stdout.write('  '+trace+'[label="min='+ print_time(call[thread][trace].min_time)+',max='+print_time(call[thread][trace].max_time)+'"]'+ ' \n');
+      process.stdout.write('  '+trace+'[label="' + print_time(call[thread][trace].min_time)+','+print_time(call[thread][trace].max_time)+'/' + call[thread][trace].count + '"]\n');
     }
     process.stdout.write('}\n');
   }
