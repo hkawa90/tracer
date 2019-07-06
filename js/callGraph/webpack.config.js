@@ -19,7 +19,8 @@ module.exports = {
     //  出力ファイルのディレクトリ名
     path: path.resolve(__dirname, 'dist'),
     // 出力ファイル名
-    filename: 'main.js'
+    filename: 'main.js',
+    libraryTarget: 'commonjs' // using module.exports(es2015 syntax)
   },
   resolve: {
     modules: [

@@ -15,7 +15,7 @@
     "webpack-cli": "^3.3.5"
   },
   "bin": {
-    "callgraph": "./dist/main.js"
+    "callgraph": "./bin/index.js"
   },
   "dependencies": {
     "command-line-args": "^5.1.1"

@@ -1,32 +1,8 @@
-const fs = require('fs');
-const readline = require('readline');
-const commandLineArgs = require('command-line-args');
-
 var currentFunc = [];
+var funcSeries = [];
 var call = [];
 var stack = [];
 
-const optionDefinitions = [
-  {
-    name: 'file',
-    alias: 'f',
-    type: String
-  },
-  {
-    name: 'help',
-    alias: 'h',
-    type: Boolean
-  }
-];
-
-function isExistFile(file) {
-  try {
-    fs.statSync(file);
-    return true
-  } catch(err) {
-    if(err.code === 'ENOENT') return false
-  }
-}
 
 function diff_timespec(start, end)
 {
@@ -83,6 +59,32 @@ function min_timespec(v1, v2)
     }
   } else {
     return v2;
+  }
+}
+
+function div_timespec(v, divideNumber)
+{
+  var v1, v2;
+  v1 = v2 = {};
+  v1.tv_sec = v1.tv_nsec = 0;
+  v2.tv_sec = v2.tv_nsec = 0;
+  if (v.tv_sec !== 0)
+    v1.tv_sec = v.tv_sec / divideNumber;
+  if (v.tv_nsec !== 0)
+    v2.tv_nsec = Math.floor(v.tv_nsec / divideNumber);
+  return add_timespec(v1, v2);
+}
+
+function calc_average()
+{
+  for (var thread in call) {
+    for (var trace in call[thread]) {
+      var count = call[thread][trace].count;
+      var ave_time = div_timespec(call[thread][trace].sum_time, count);
+      call[thread][trace].avg_time = ave_time;
+      var ave_cputime = div_timespec(call[thread][trace].sum_cputime, count);
+      call[thread][trace].avg_cputime = ave_cputime;
+    }
   }
 }
 
@@ -157,29 +159,16 @@ function createTraceInfo()
   obj.avg_cputime.tv_nsec = 0;
   return obj;
 }
-const options = commandLineArgs(optionDefinitions);
-var traceFile = './trace.dat';
-// HELP
-if (options.help) {
-  process.stdout.write('option list:');
-  process.stdout.write(' -f,-file trace.dat   : specify trace file.');
-  process.stdout.write(' -h,-help             : This message.');
-  process.exit(1);
+function parseTraceInfoInit()
+{
+  currentFunc = [];
+  call = [];
+  stack = [];
+  funcSeries = [];
 }
 
-if (options.file !== null) {
-  if (isExistFile(options.file)) {
-    traceFile = options.file;
-  } else {
-    process.exit(2);
-  }
-}
-rs = fs.createReadStream(traceFile);
-
-var rl = readline.createInterface(rs, {});
-
-
-rl.on('line', function(line) {
+function parseTraceInfo(line)
+{
   var words = line.split(/\s+/);
   var func = words[2];
   var status = words[0];
@@ -238,16 +227,60 @@ rl.on('line', function(line) {
     call[threadID][flow].min_cputime = min_timespec(call[threadID][flow].min_cputime, diffCpuTime);
     call[threadID][flow].max_time = max_timespec(call[threadID][flow].max_time, diffTime);
     call[threadID][flow].max_cputime = max_timespec(call[threadID][flow].max_cputime, diffCpuTime);
+
+    if (funcSeries[func] === undefined) {
+      funcSeries[func] = [];
+    }
+    var funcInfo = {};
+    funcInfo.start = prev.time;
+    funcInfo.end = time;
+    funcInfo.func = func;
+    funcInfo.caller = prev.prevFunc;
+    funcSeries[func].push(funcInfo);
     currentFunc[threadID] = prev.prevFunc;
   }
-});
+}
 
-rl.on('close', function() {
+function printDot(buffer)
+{
+  calc_average();
+  if ((buffer === undefined) || (buffer === null))
+    buffer = '';
   for (var thread in call) {
-    process.stdout.write('digraph call_graph_'+ thread+' {\n');
+    buffer += 'digraph call_graph_'+ thread+' {\n';
     for (var trace in call[thread]) {
-      process.stdout.write('  '+trace+'[label="' + print_time(call[thread][trace].min_time)+','+print_time(call[thread][trace].max_time)+'/' + call[thread][trace].count + '"]\n');
+      buffer += '  '+trace+'[label="' + print_time(call[thread][trace].min_time)+','+print_time(call[thread][trace].max_time)+'/' + call[thread][trace].count + '"]\n';
     }
-    process.stdout.write('}\n');
+    buffer += '}\n';
   }
-});
+  return buffer;
+}
+
+function printJSON(buffer)
+{
+  calc_average();
+  var data = {};
+  if ((buffer === undefined) || (buffer === null))
+    buffer = '';
+  data.call_flow = [];
+  for (var threadID in call) {
+    for (var trace in call[threadID]) {
+      call[threadID][trace].threadID = threadID;
+      call[threadID][trace].flow = trace;
+      data.call_flow.push(call[threadID][trace]);
+    }
+  }
+  data.funcSeries = [];
+  for (var f in funcSeries) {
+    for (var c = 0; c < funcSeries[f].length; c++) {
+      data.funcSeries.push(funcSeries[f][c]);
+    }
+  }
+  buffer += JSON.stringify(data, null, ' ');
+  return buffer;
+}
+
+module.exports.parseTraceInfo =  parseTraceInfo;
+module.exports.parseTraceInfoInit =  parseTraceInfoInit;
+module.exports.printDot =  printDot;
+module.exports.printJSON =  printJSON;
