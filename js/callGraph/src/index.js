@@ -238,7 +238,7 @@ function parseTraceInfo(line)
     funcInfo.func = func;
     funcInfo.caller = prev.prevFunc;
     funcInfo.threadID = threadID;
-    funcInfo.depthr = stack[threadID].length;
+    funcInfo.depth = stack[threadID].length;
     funcSeries[func].push(funcInfo);
     currentFunc[threadID] = prev.prevFunc;
   }
