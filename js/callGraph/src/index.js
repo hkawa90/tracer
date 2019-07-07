@@ -217,6 +217,7 @@ function parseTraceInfo(line)
     var flow = prev.prevFunc + '->' + func;
     diffTime = diff_timespec(prev.time, time);
     diffCpuTime = diff_timespec(prev.cputime, cputime);
+    call[threadID][flow].depth = stack[threadID].length;
     call[threadID][flow].time = diffTime;
     call[threadID][flow].cputime = diffCpuTime;
     call[threadID][flow].sum_time = add_timespec(call[threadID][flow].sum_time, diffTime);
