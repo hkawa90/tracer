@@ -1,16 +1,27 @@
 #define _FINSTRUMENT_
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 #include "finstrument.h"
 
-#ifdef __cplsuplus
+#ifdef __cplusplus
+}
+#endif
 #define DMGL_PARAMS      (1 << 0)  /* Include function args */
 #define DMGL_ANSI        (1 << 1)  /* Include const, volatile, etc */
 #define DMGL_VERBOSE     (1 << 3)  /* Include implementation details.  */
 #define DMGL_TYPES       (1 << 4)  /* Also try to demangle type encodings. */
-extern "C" char *cplus_demangle(const char *mangled, int options);
-#endif
+char *cplus_demangle(const char *mangled, int options);
 
+static struct hook_funcs  funcs;
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 /* Function prototypes with attributes */
 int print_traceinfo(int fd, TRACER_INFO *tr)
   __attribute__ ((no_instrument_function));
@@ -54,6 +65,15 @@ void tracer_backtrack(int fd)
 const char* addr2name(void* address)
   __attribute__ ((no_instrument_function));
 
+int getAppFullPath(char *buf, int bufLen, pid_t pid)
+  __attribute__ ((no_instrument_function));
+
+void *getBaseAddress(void)
+  __attribute__ ((no_instrument_function));
+
+#ifdef __cplusplus
+}
+#endif
 
 
 static int fd;
@@ -97,6 +117,7 @@ int changeTraceOption(TRACER_OPTION *tp)
     trace.threadIDTable = (int *)realloc(trace.threadIDTable, sizeof(int) * trace.option.max_threadNum);
     memset(trace.threadIDTable, 0, sizeof(int) * trace.option.max_threadNum);
   }
+  return 0;
 }
 
 void app_signal_handler(int sig, siginfo_t *info, void *ctx)
@@ -146,7 +167,7 @@ int writeRingbuffer(int fd)
   for (i = 0; i < trace.lookupThreadIDNum; i++) {
     int next = (trace.ring[i]->top + 1) % trace.option.max_ringbufferItemNum;
     for (j = next; j < trace.option.max_ringbufferItemNum; j++) {
-      TRACER_INFO *ti = (TRACER_INFO *)(trace.ring[i]->buffer + trace.ring[i]->itemSize * j);
+      TRACER_INFO *ti = (TRACER_INFO *)(trace.ring[i]->buffer) + trace.ring[i]->itemSize * j;
       if (ti == NULL) {
         continue;
       }
@@ -157,7 +178,7 @@ int writeRingbuffer(int fd)
     if (ret != 0)
       break;
     for (j = 0; j < trace.ring[i]->top; j++) {
-      TRACER_INFO *ti = (TRACER_INFO *)(trace.ring[i]->buffer + trace.ring[i]->itemSize * j);
+      TRACER_INFO *ti = (TRACER_INFO *)(trace.ring[i]->buffer) + trace.ring[i]->itemSize * j;
       if (ti == NULL) {
         continue;
       }
@@ -187,9 +208,79 @@ int  push_ringbuffer(RINGBUFFER *ring, void *data, size_t size)
     return -2;
   }
   pos = ((ring->top + 1) % ring->itemNumber) * ring->itemSize;
-  memcpy(ring->buffer + pos, data, size);
+  memcpy((TRACER_INFO *)ring->buffer + pos, data, size);
   // update top
   ring->top = (ring->top + 1) % ring->itemNumber;
+  return 0;
+}
+
+int getAppFullPath(char *buf, int bufLen, pid_t pid) {
+  char path[PATH_MAX]={0};
+
+  snprintf(path, PATH_MAX, "/proc/%d/exe", (int)pid); // limits.h
+  if (readlink(path, buf, bufLen) < 0)
+    return -1;
+  else
+    return 0;
+}
+
+
+void *getBaseAddress() {
+  char path[PATH_MAX]={0};
+  char line[MAX_LINE_LEN];
+  FILE  *fd;
+  pid_t pid;
+  void *adr, *addr_start, *addr_end;
+  int offset;
+  char *attribute, *dev;
+  long inode;
+  char *fullpath;
+  char *tp, *saveptr1, *saveptr2;
+  char realpath[PATH_MAX]={0};
+
+  pid = getpid();
+  getAppFullPath(realpath, PATH_MAX, pid);
+  snprintf(path, PATH_MAX, "/proc/%d/maps", pid);
+  fd = fopen(path, "r");
+
+  while (fgets(line, MAX_LINE_LEN, fd) != NULL) {
+    int cnt = 0;
+    char *addr_range;
+    tp = strtok_r( line, " \n", &saveptr1);
+    addr_range = (char *)malloc(strlen(tp) + 1);
+    strcpy(addr_range, tp);
+    if (tp != NULL) {
+      char *p;
+      p = strtok_r( addr_range, "-", &saveptr2);
+      addr_start = (void *)strtol(p, NULL, 16);
+      addr_end = (void *)strtol(saveptr2, NULL, 16);
+    }
+    free(addr_range);
+    while ( tp != NULL ) {
+      tp = strtok_r( NULL," \n" , &saveptr1);
+      if ( tp != NULL ) {
+        if (cnt == 0) {
+          attribute = tp;
+        } else if (cnt == 1) {
+          offset = strtol(tp, NULL, 16);
+        } else if (cnt == 2) {
+          dev = tp;
+        } else if (cnt == 3) {
+          inode = strtol(tp, NULL, 10);
+        } else if (cnt == 4) {
+          fullpath = tp;
+        }
+      }
+      cnt++;
+    }
+    if ((strncmp(fullpath, realpath, PATH_MAX) == 0) && (strchr(attribute, 'x') != NULL)) {
+      //printf("%p-%p %4s %p %4s %ld %s", addr_start, addr_end, attribute, offset, dev, inode, fullpath);
+      break;
+    }
+  }
+  fclose(fd);
+  return (void *)((char *)addr_start - offset);
+  //return (void *)addr_start;
 }
 
 const char* addr2name(void* address) {
@@ -197,7 +288,7 @@ const char* addr2name(void* address) {
     if (0 != dladdr(address, &dli)) {
         return dli.dli_sname;
     }
-    return 0;
+    return "<NULL>";
 }
 
 int print_traceinfo(int fd, TRACER_INFO *tr)
@@ -205,7 +296,7 @@ int print_traceinfo(int fd, TRACER_INFO *tr)
   int err;
   char buf[MAX_LINE_LEN + 1];
 #if 0
-  snprintf(buf, MAX_LINE_LEN, "%c %10d %16p %10ld %10ld %10ld %10ld\n",
+  snprintf(buf, MAX_LINE_LEN, "%c %10d %p %10ld %10ld %10ld %10ld\n",
     tr->status,
     tr->thread_id,
     tr->this,
@@ -215,21 +306,21 @@ int print_traceinfo(int fd, TRACER_INFO *tr)
     tr->timeOfThreadProcess.tv_sec
     );
 #else
-#ifdef __cplsuplus
-  snprintf(buf, MAX_LINE_LEN, "%c %10d %s %10ld %10ld %10ld %10ld\n",
+#ifdef __cplusplus
+  snprintf(buf, MAX_LINE_LEN, "%c %10d %p %10ld %10ld %10ld %10ld\n",
     tr->status,
     tr->thread_id,
-    cplus_demangle(addr2name(tr->addr), DMGL_PARAMS | DMGL_ANSI | DMGL_TYPES),
+    tr->addr,
     tr->time.tv_sec,
     tr->time.tv_nsec,
     tr->timeOfThreadProcess.tv_sec,
     tr->timeOfThreadProcess.tv_nsec
     );
 #else
-  snprintf(buf, MAX_LINE_LEN, "%c %10d %s %10ld %10ld %10ld %10ld\n",
+  snprintf(buf, MAX_LINE_LEN, "%c %10d %p %10ld %10ld %10ld %10ld\n",
     tr->status,
     tr->thread_id,
-    addr2name(tr->addr),
+    tr->addr,
     tr->time.tv_sec,
     tr->time.tv_nsec,
     tr->timeOfThreadProcess.tv_sec,
@@ -262,7 +353,7 @@ void write_traceinfo(void* addr, void *callsite, char status)
   }
   tr.thread_id = syscall(SYS_gettid);
   tr.status = status;
-  tr.addr = addr;
+  tr.addr = (void *)((char *)addr - (char *)trace.baseAddress);
   tr.callsite = callsite;
   if (trace.option.use_ringbuffer == 1) {
     push_ringbuffer(trace.ring[lookupThreadID(tr.thread_id)], &tr, sizeof(tr));
@@ -288,12 +379,14 @@ void main_constructor( void )
 {
   struct sigaction sa_sig;
 
+  funcs.create = (int (*)(pthread_t*, const pthread_attr_t*, void *(*r)(void *), void *)) dlsym(RTLD_NEXT,"pthread_create");
+
   memset(&trace, 0, sizeof(TRACER));
   trace.option.use_ringbuffer = 0; // not used
   trace.option.use_timestamp = 1;
   trace.option.max_threadNum = 100; // not used
   trace.option.use_cputime = 1;
-  
+
   changeTraceOption(&trace.option);
 
   fd = open(TRACE_FILE_PATH, O_WRONLY|O_CREAT|O_TRUNC, S_IWUSR | S_IXUSR | S_IRUSR);
@@ -310,6 +403,7 @@ void main_constructor( void )
   }
   pthread_mutex_init(&trace.trace_write_mutex, NULL);
   pthread_mutex_init(&trace.trace_lookup_mutex, NULL);
+  trace.baseAddress = getBaseAddress();
 }
 
 /**
@@ -325,13 +419,13 @@ void main_deconstructor( void )
 
 void __cyg_profile_func_enter( void *addr, void *callsite )
 {
-  write_traceinfo(addr, callsite, 'E');
+  write_traceinfo(addr, callsite, 'I');
 }
 
 
 void __cyg_profile_func_exit( void *addr, void *callsite )
 {
-  write_traceinfo(addr, callsite, 'X');
+  write_traceinfo(addr, callsite, 'O');
 }
 
 void tracer_backtrack(int fd)
@@ -344,9 +438,25 @@ void tracer_backtrack(int fd)
     for (i = 4; i != 0; i--) {
       char buf[256];
       int pos = (trace.ring[idx]->top - i) % trace.option.max_ringbufferItemNum;
-      TRACER_INFO *ti = (TRACER_INFO *)(trace.ring[idx]->buffer + trace.ring[idx]->itemSize * pos);
+      TRACER_INFO *ti = (TRACER_INFO *)(trace.ring[idx]->buffer) + trace.ring[idx]->itemSize * pos;
       snprintf(buf, 255, "ThreadID:%d %p\n", ti->thread_id, ti->addr);
       write(fd, buf, strnlen(buf, 255));
     }
   }
+}
+
+int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+                   void *(*start_routine) (void *), void *arg)
+{
+  char buf[MAX_LINE_LEN + 1];
+  int thread_id = syscall(SYS_gettid);
+  struct timespec time, timeOfThreadProcess;
+
+  clock_gettime( CLOCK_MONOTONIC, &time);
+  clock_gettime( CLOCK_THREAD_CPUTIME_ID, &timeOfThreadProcess);
+  snprintf(buf, MAX_LINE_LEN, "E %10d %p %10ld %10ld %10ld %10ld pthread_create\n",
+           thread_id, (void *)((char *)start_routine - (char *)trace.baseAddress),
+           time.tv_sec, time.tv_nsec, timeOfThreadProcess.tv_sec, timeOfThreadProcess.tv_nsec);
+  write(fd, buf, strnlen(buf, MAX_LINE_LEN));
+  return funcs.create(thread, attr, start_routine, arg);
 }

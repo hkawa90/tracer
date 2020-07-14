@@ -1,4 +1,14 @@
+#define HAVE_DECL_BASENAME	1
+#ifndef __cplusplus
 #define _GNU_SOURCE
+#define __USE_GNU
+#endif
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -13,17 +23,10 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <pthread.h>
-#define __USE_GNU
 #include <dlfcn.h>
-#ifdef __cplsuplus
-#include <demangle.h>
+#ifdef __cplusplus
+#include <libiberty/demangle.h>
 #endif
-
-#ifdef __cplsuplus
-extern "C"
-{
-#endif
-
 
 typedef struct ringbuffer {
     int itemNumber; //
@@ -49,6 +52,7 @@ typedef struct tracer_ {
     RINGBUFFER **ring;
     int *threadIDTable;
     int lookupThreadIDNum;
+    void *baseAddress;
     pthread_mutex_t trace_write_mutex;
     pthread_mutex_t trace_lookup_mutex;
 } TRACER;
@@ -58,10 +62,17 @@ typedef struct tracer_info {
     struct timespec time;
     struct timespec timeOfThreadProcess;
     int thread_id;
+
     char status;
     void *addr;
     void *callsite;
 } TRACER_INFO;
+
+struct hook_funcs {
+    int (*create)(pthread_t *, const pthread_attr_t *, void *(*r) (void *), void *);
+    int (*join)(pthread_t thread, void **retval);
+    void (*exit)(void *retval);
+};
 
 #define TRACE_FILE_PATH	            "trace.dat"
 #define MAX_BACK_TRACK_NUM			(5)
@@ -71,6 +82,6 @@ extern void tracer_backtrack(int fd);
 extern int changeTraceOption(TRACER_OPTION *tp);
 #endif
 
-#ifdef __cplsuplus
+#ifdef __cplusplus
 };
 #endif

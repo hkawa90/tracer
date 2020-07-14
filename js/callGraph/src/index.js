@@ -2,6 +2,7 @@ var currentFunc = [];
 var funcSeries = [];
 var call = [];
 var stack = [];
+var event = [];
 
 
 function diff_timespec(start, end)
@@ -164,6 +165,7 @@ function parseTraceInfoInit()
   currentFunc = [];
   call = [];
   stack = [];
+  event = [];
   funcSeries = [];
 }
 
@@ -192,7 +194,7 @@ function parseTraceInfo(line)
   if (currentFunc[threadID] === undefined) {
     currentFunc[threadID] = '_';
   }
-  if (status === 'E') {
+  if (status === 'I') {
     if (stack[threadID] === undefined) {
       stack[threadID] = [];
     }
@@ -211,7 +213,7 @@ function parseTraceInfo(line)
     call[threadID][currentFunc[threadID] + '->' + func].start_cputime.tv_sec = cputime.tv_sec;
     call[threadID][currentFunc[threadID] + '->' + func].start_cputime.tv_nsec = cputime.tv_nsec;
     currentFunc[threadID] = func;
-  } else { // status === 'X'
+  } else if (status === 'O') { // status === 'O'
     var prev = stack[threadID].pop();
     var diffTime, diffCpuTime;
     var flow = prev.prevFunc + '->' + func;
@@ -241,6 +243,9 @@ function parseTraceInfo(line)
     funcInfo.depth = stack[threadID].length;
     funcSeries[func].push(funcInfo);
     currentFunc[threadID] = prev.prevFunc;
+  } else if (status === 'E') { // event
+    var comment = words[7];
+    event.psuh({threadID, func, time, cputime, comment});
   }
 }
 
@@ -278,6 +283,10 @@ function printJSON(buffer)
     for (var c = 0; c < funcSeries[f].length; c++) {
       data.funcSeries.push(funcSeries[f][c]);
     }
+  }
+  data.event = [];
+  for (var cnt = 0; cnt < event.length; cnt++) {
+    data.event.push(event[cnt]);
   }
   buffer += JSON.stringify(data, null, ' ');
   return buffer;

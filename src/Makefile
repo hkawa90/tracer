@@ -12,28 +12,19 @@ CFLAGS   = -rdynamic -g -finstrument-functions -Wall -pthread
 LDFLAGS  = -rdynamic -lpthread -ldl -L.
 CPP_LDFLAGS  = -rdynamic -liberty -lpthread -ldl -L.
 
-SHARED_CFLAGS = -g -Wall -fPIC -I. -rdynamic -g -finstrument-functions -Wall -pthread 
-SHARED_LDFLAGS= -shared -fPIC -liberty -lpthread -ldl -L.
+SHARED_LDFLAGS= -shared -fPIC -lpthread -ldl -L.
+SHARED_CPP_LDFLAGS= $(SHARED_LDFLAGS)
 
-all: libtrace.so libtrace++.so 
-
-mytest: $(OBJS)
-	$(CC) -o $@ $(OBJS) $(LDFLAGS)
-
-mycpptest: $(CPP_OBJS)
-	$(CPP) -o $@ $(CPP_OBJS) $(CPP_LDFLAGS)
+all: libtrace.so libtrace++.so
 
 libtrace.so : finstrument.c
-	$(CC) -o $@ $+ $(SHARED_LDFLAGS)
-
-libtrace++.o : finstrument.c
-	$(CPP) -o $@ $+ $(SHARED_CFLAGS)
+	$(CC) -g -o $@ $+ $(SHARED_LDFLAGS)
 
 libtrace++.so : finstrument.c
-	$(CPP) -o $@ $+ $(SHARED_LDFLAGS)
+	$(CPP) -o $@ $+ $(SHARED_CPP_LDFLAGS)
 
 .c.o:
 	$(CC) $(CFLAGS) -c $<
 
 clean:
-	rm -f *.o
+	rm -f *.o *.so
