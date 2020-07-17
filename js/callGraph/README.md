@@ -1,4 +1,4 @@
-callgraph
+Callgraph
 ====
 
 トレース情報からcall graphを作成する。
@@ -14,7 +14,7 @@ Graphviz, Node.js
 
 ## Usage
 
-	$ node dist/main.js | dot -Tpng -Gdpi=200 > g.png
+	$ node bin/index.js -e executable_file -f trace.dat | dot -Tpng -Gdpi=200 > g.png
 	$ display g.png
 
 ## Install
