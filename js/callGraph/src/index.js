@@ -3,7 +3,10 @@ var funcSeries = [];
 var call = [];
 var stack = [];
 var event = [];
+var exeFile = '';
+var funcID = 0;
 
+var sync = require('child_process').spawnSync;
 
 function diff_timespec(start, end)
 {
@@ -160,19 +163,27 @@ function createTraceInfo()
   obj.avg_cputime.tv_nsec = 0;
   return obj;
 }
-function parseTraceInfoInit()
+function parseTraceInfoInit(executableFile)
 {
   currentFunc = [];
   call = [];
   stack = [];
   event = [];
   funcSeries = [];
+  exeFile = executableFile;
+  funcID = 0;
 }
+
+function addr2func(addr) {
+  var addr2line = sync('addr2line', ['-e', exeFile, '-pf', addr]);
+  return addr2line.stdout.toString().split(' ')[0];
+}
+
 
 function parseTraceInfo(line)
 {
   var words = line.split(/\s+/);
-  var func = words[2];
+  var func = addr2func(words[2]);
   var status = words[0];
   var threadID = words[1];
   var time = {};
@@ -235,6 +246,8 @@ function parseTraceInfo(line)
       funcSeries[func] = [];
     }
     var funcInfo = {};
+    funcID ++;
+    funcInfo.id = funcID;
     funcInfo.start = prev.time;
     funcInfo.end = time;
     funcInfo.func = func;

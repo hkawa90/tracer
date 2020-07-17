@@ -3,12 +3,18 @@
 const fs = require('fs');
 const readline = require('readline');
 const commandLineArgs = require('command-line-args');
-const ftracer_parse = require('../dist/main.js');
+//const ftracer_parse = require('../dist/main.js');
+const ftracer_parse = require('../src/index.js');
 
 const optionDefinitions = [
   {
     name: 'file',
     alias: 'f',
+    type: String
+  },
+  {
+    name: 'exe',
+    alias: 'e',
     type: String
   },
   {
@@ -34,10 +40,13 @@ function isExistFile(file) {
 
 const options = commandLineArgs(optionDefinitions);
 var traceFile = './trace.dat';
+var exeFile = '';
 // HELP
 if (options.help) {
   process.stdout.write('option list:\n');
+  process.stdout.write(' -e,-exe  file        : specify executable file');
   process.stdout.write(' -f,-file trace.dat   : specify trace file.\n');
+  process.stdout.write(' -j,-output_json      : output json.\n');
   process.stdout.write(' -h,-help             : This message.\n');
   process.exit(1);
 }
@@ -49,11 +58,19 @@ if (options.file !== null) {
     process.exit(2);
   }
 }
+if (options.exe !== null) {
+  if (isExistFile(options.exe)) {
+    exeFile = options.exe;
+  } else {
+    process.exit(2);
+  }
+}
+
 rs = fs.createReadStream(traceFile);
 
 var rl = readline.createInterface(rs, {});
 
-ftracer_parse.parseTraceInfoInit();
+ftracer_parse.parseTraceInfoInit(exeFile);
 
 rl.on('line', function(line) {
   ftracer_parse.parseTraceInfo(line);
