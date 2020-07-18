@@ -3,8 +3,8 @@
 const fs = require('fs');
 const readline = require('readline');
 const commandLineArgs = require('command-line-args');
-//const ftracer_parse = require('../dist/main.js');
-const ftracer_parse = require('../src/index.js');
+const ftracer_parse = require('../dist/main.js');
+//const ftracer_parse = require('../src/index.js');
 
 const optionDefinitions = [
   {

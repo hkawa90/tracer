@@ -9,13 +9,17 @@ Callgraph
 ソースコードはJavasciprtで記述されて、node.jsで実行する。
 
 ## Requirement
-
-Graphviz, Node.js
+Graphviz, Node.js, addr2line(binutils)
 
 ## Usage
+### Create Callgraph
 
 	$ node bin/index.js -e executable_file -f trace.dat | dot -Tpng -Gdpi=200 > g.png
 	$ display g.png
+
+### Create json file
+
+	$ node bin/index.js -e executable_file -j -f trace.dat | trace.json
 
 ## Install
 
@@ -24,6 +28,13 @@ Graphviz, Node.js
 ## Licence
 
 Free
+
+## TODO
+
++ [ ] Customize [dot style](https://graphviz.org/doc/info/attrs.html)
+  + [ ] default dot style file
+  + [ ] user dot style file
++ [ ] Detailed description
 
 ## Author
 
