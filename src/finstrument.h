@@ -69,9 +69,11 @@ typedef struct tracer_info {
 } TRACER_INFO;
 
 struct hook_funcs {
-    int (*create)(pthread_t *, const pthread_attr_t *, void *(*r) (void *), void *);
-    int (*join)(pthread_t thread, void **retval);
-    void (*exit)(void *retval);
+    int (*pthread_create)(pthread_t *, const pthread_attr_t *, void *(*r) (void *), void *);
+    int (*pthread_join)(pthread_t thread, void **retval);
+    void (*exit)(int retval);
+    void (*pthread_exit)(void *retval);
+    pid_t (*fork)(void);
 };
 
 #define TRACE_FILE_PATH	            "trace.dat"
