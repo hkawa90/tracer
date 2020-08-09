@@ -52,7 +52,6 @@ typedef struct tracer_ {
     RINGBUFFER **ring;
     int *threadIDTable;
     int lookupThreadIDNum;
-    void *baseAddress;
     pthread_mutex_t trace_write_mutex;
     pthread_mutex_t trace_lookup_mutex;
 } TRACER;
@@ -64,8 +63,7 @@ typedef struct tracer_info {
     int thread_id;
 
     char status;
-    void *addr;
-    void *callsite;
+    char *func;
 } TRACER_INFO;
 
 struct hook_funcs {
