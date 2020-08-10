@@ -25,8 +25,10 @@ extern "C"
 #include <pthread.h>
 #include <dlfcn.h>
 #ifdef __cplusplus
-#include <libiberty/demangle.h>
 #endif
+
+#ifndef FINSTRUMENT_H
+#define FINSTRUMENT_H
 
 typedef struct ringbuffer {
     int itemNumber; //
@@ -75,12 +77,16 @@ struct hook_funcs {
 };
 
 #define TRACE_FILE_PATH	            "trace.dat"
+#define TRACE_CONF_PATH	            "tracer.conf"
 #define MAX_BACK_TRACK_NUM			(5)
 #define MAX_LINE_LEN                (255)
 #ifndef _FINSTRUMENT_
 extern void tracer_backtrack(int fd);
 extern int changeTraceOption(TRACER_OPTION *tp);
+extern int writeRingbuffer(int fd);
 #endif
+
+#endif // FINSTRUMENT_H
 
 #ifdef __cplusplus
 };

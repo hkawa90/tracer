@@ -1,5 +1,23 @@
 #include "bt.h"
 
+int
+callback_backtrace(void *vdata, uintptr_t pc)
+__attribute__((no_instrument_function));
+
+int
+callback_backtrace_pcinfo(void *vdata, uintptr_t pc,
+    const char *filename, int lineno, const char *function)
+    __attribute__((no_instrument_function));
+
+void init_trace_backtrace()
+__attribute__((no_instrument_function));
+
+int trace_backtrace(int depth, struct info *symbol_info)
+__attribute__((no_instrument_function));
+
+int trace_backtrace_pcinfo(uintptr_t addr, struct info *symbol_info)
+__attribute__((no_instrument_function));
+
 void *state = NULL;
 
 /* Passed to backtrace callback function.  */

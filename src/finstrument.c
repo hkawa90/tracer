@@ -7,6 +7,8 @@ extern "C"
     #include <stdio.h>
     #include <stdlib.h>
     #include <limits.h>
+    #include <sys/stat.h>
+    #include <confuse.h>
     #include "finstrument.h"
     #include "bt.h"
 
@@ -20,81 +22,99 @@ static struct hook_funcs funcs;
 #ifdef __cplusplus
 extern "C"
 {
-    #endif
-    /* Function prototypes with attributes */
-    int print_traceinfo(int fd, TRACER_INFO *tr)
-        __attribute__((no_instrument_function));
+#endif
+/* Function prototypes with attributes */
+int print_traceinfo(int fd, TRACER_INFO *tr)
+    __attribute__((no_instrument_function));
 
-    void write_traceinfo(struct info, char status)
-        __attribute__((no_instrument_function));
+void write_traceinfo(struct info, char status)
+    __attribute__((no_instrument_function));
 
-    int write_ringbuffer(void *, size_t size)
-        __attribute__((no_instrument_function));
+int write_ringbuffer(void *, size_t size)
+    __attribute__((no_instrument_function));
 
-    void main_constructor(void)
-        __attribute__((no_instrument_function, constructor));
+void main_constructor(void)
+    __attribute__((no_instrument_function, constructor));
 
-    void main_destructor(void)
-        __attribute__((no_instrument_function, destructor));
+void main_destructor(void)
+    __attribute__((no_instrument_function, destructor));
 
-    void __cyg_profile_func_enter(void *, void *)
-        __attribute__((no_instrument_function));
+void __cyg_profile_func_enter(void *, void *)
+    __attribute__((no_instrument_function));
 
-    void __cyg_profile_func_exit(void *, void *)
-        __attribute__((no_instrument_function));
+void __cyg_profile_func_exit(void *, void *)
+    __attribute__((no_instrument_function));
 
-    int changeTraceOption(TRACER_OPTION *tp)
-        __attribute__((no_instrument_function));
+int changeTraceOption(TRACER_OPTION *tp)
+    __attribute__((no_instrument_function));
 
-    int lookupThreadID(int thread_id)
-        __attribute__((no_instrument_function));
+int lookupThreadID(int thread_id)
+    __attribute__((no_instrument_function));
 
-    int writeRingbuffer(int fd)
-        __attribute__((no_instrument_function));
+int writeRingbuffer(int fd)
+    __attribute__((no_instrument_function));
 
-    int push_ringbuffer(RINGBUFFER *ring, void *data, size_t size)
-        __attribute__((no_instrument_function));
+int push_ringbuffer(RINGBUFFER *ring, void *data, size_t size)
+    __attribute__((no_instrument_function));
 
-    void app_signal_handler(int sig, siginfo_t *info, void *ctx)
-        __attribute__((no_instrument_function));
+void app_signal_handler(int sig, siginfo_t *info, void *ctx)
+    __attribute__((no_instrument_function));
 
-    void tracer_backtrack(int fd)
-        __attribute__((no_instrument_function));
+void tracer_backtrack(int fd)
+    __attribute__((no_instrument_function));
 
-    char *getCaller(int)
-        __attribute__((no_instrument_function));
+char *getCaller(int)
+    __attribute__((no_instrument_function));
 
-    char *getFuncAddr(uintptr_t addr)
-        __attribute__((no_instrument_function));
+char *getFuncAddr(uintptr_t addr)
+    __attribute__((no_instrument_function));
 
-    int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
-        void *(*start_routine)(void *), void *arg)
-        __attribute__((no_instrument_function));
+int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+    void *(*start_routine)(void *), void *arg)
+    __attribute__((no_instrument_function));
 
-    int dumpFuncInfo(int thread_id, const char *caller, const char *hookFuncName)
-        __attribute__((no_instrument_function));
+int dumpFuncInfo(const char *state, int thread_id, const char *caller, const char *hookFuncName)
+    __attribute__((no_instrument_function));
 
-    int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
-        void *(*start_routine)(void *), void *arg)
-        __attribute__((no_instrument_function));
+int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+    void *(*start_routine)(void *), void *arg)
+    __attribute__((no_instrument_function));
 
-    int pthread_join(pthread_t th, void **thread_return)
-        __attribute__((no_instrument_function));
+int pthread_join(pthread_t th, void **thread_return)
+    __attribute__((no_instrument_function));
 
-    void pthread_exit(void *retval)
-        __attribute__((no_instrument_function));
+void pthread_exit(void *retval)
+    __attribute__((no_instrument_function));
 
-    void exit(int status)
-        __attribute__((no_instrument_function));
+void exit(int status)
+    __attribute__((no_instrument_function));
 
-    pid_t fork(void)
-        __attribute__((no_instrument_function));
-    #ifdef __cplusplus
+pid_t fork(void)
+    __attribute__((no_instrument_function));
+
+int isExistFile(const char*)
+    __attribute__((no_instrument_function));
+
+#ifdef __cplusplus
 }
 #endif
 
 static int fd;
 static TRACER trace;
+
+/**
+ *
+ * @return 存在したら 0以外、存在しなければ 0
+*/
+int isExistFile(const char* path)
+{
+    struct stat st;
+
+    if (stat(path, &st) != 0) {
+        return 0;
+    }
+    return (st.st_mode & S_IFMT) == S_IFREG;
+}
 
 int changeTraceOption(TRACER_OPTION *tp)
 {
@@ -188,6 +208,7 @@ int lookupThreadID(int thread_id)
  */
 int writeRingbuffer(int fd)
 {
+    TRACER_INFO tr;
     int i, j, ret = 0;
 
     for (i = 0; i < trace.lookupThreadIDNum; i++)
@@ -196,27 +217,18 @@ int writeRingbuffer(int fd)
         for (j = next; j < trace.option.max_ringbufferItemNum; j++)
         {
             TRACER_INFO *ti = (TRACER_INFO *)(trace.ring[i]->buffer) + trace.ring[i]->itemSize * j;
+            memcpy(&tr, ti, sizeof(TRACER_INFO));
+            tr.func = strdup(ti->func);
             if (ti == NULL)
             {
                 continue;
             }
-            ret = write(fd, (void *)ti, sizeof(TRACER_INFO));
+            ret = print_traceinfo(fd, &tr);
             if (ret != 0)
                 break;
         }
         if (ret != 0)
             break;
-        for (j = 0; j < trace.ring[i]->top; j++)
-        {
-            TRACER_INFO *ti = (TRACER_INFO *)(trace.ring[i]->buffer) + trace.ring[i]->itemSize * j;
-            if (ti == NULL)
-            {
-                continue;
-            }
-            ret = write(fd, (void *)ti, sizeof(TRACER_INFO));
-            if (ret != 0)
-                break;
-        }
     }
     return ret;
 }
@@ -320,21 +332,57 @@ void write_traceinfo(struct info symbol_info, char status)
  */
 void main_constructor(void)
 {
+    cfg_opt_t opts[] =
+    {
+        CFG_INT("use_ringbuffer", 0, CFGF_NONE),
+        CFG_INT("use_timestamp", 1, CFGF_NONE),
+        CFG_INT("use_cputime", 1, CFGF_NONE),
+        CFG_INT("use_backtrack", 0, CFGF_NONE),
+        CFG_INT("max_backtrack_num", 10, CFGF_NONE),
+        CFG_INT("max_threadNum", 100, CFGF_NONE),
+        CFG_INT("max_ringbufferItemNum", 100, CFGF_NONE),
+        CFG_END()
+    };
+    cfg_t *cfg;
+    const char *tracer_conf = getenv("TRACER_CONF");
     struct sigaction sa_sig;
 
+    if ((tracer_conf == NULL) || (isExistFile(tracer_conf) == 0)) {
+        tracer_conf = TRACE_CONF_PATH;
+    }
+    memset(&trace, 0, sizeof(TRACER));
+    cfg = cfg_init(opts, CFGF_NONE);
+    if (cfg_parse(cfg, tracer_conf) != CFG_PARSE_ERROR) {
+        trace.option.use_ringbuffer = cfg_getint(cfg, "use_ringbuffer");
+        trace.option.use_timestamp = cfg_getint(cfg, "use_timestamp");
+        trace.option.use_cputime = cfg_getint(cfg, "use_cputime");
+        trace.option.use_backtrack = cfg_getint(cfg, "use_backtrack");
+        trace.option.max_backtrack_num = cfg_getint(cfg, "max_backtrack_num");
+        trace.option.max_threadNum = cfg_getint(cfg, "max_threadNum");
+        trace.option.max_ringbufferItemNum = cfg_getint(cfg, "max_ringbufferItemNum");
+        cfg_free(cfg);
+    }
+    else {
+        trace.option.use_ringbuffer = 0;
+        trace.option.use_timestamp = 1;
+        trace.option.use_cputime = 1;
+        trace.option.use_backtrack = 0;
+        trace.option.max_backtrack_num = 10;
+        trace.option.max_threadNum = 100;
+        trace.option.max_ringbufferItemNum = 100;
+    }
     init_trace_backtrace();
 
     funcs.pthread_create = (int (*)(pthread_t *, const pthread_attr_t *, void *(*r)(void *), void *))dlsym(RTLD_NEXT, "pthread_create");
+    if (funcs.pthread_create == NULL) fprintf(stderr, "dlsym failed for pthread_create\n");
     funcs.pthread_join = (int (*)(pthread_t, void **))dlsym(RTLD_NEXT, "pthread_join");
+    if (funcs.pthread_join == NULL) fprintf(stderr, "dlsym failed for pthread_join\n");
     funcs.exit = (void (*)(int))dlsym(RTLD_NEXT, "exit");
+    if (funcs.exit == NULL) fprintf(stderr, "dlsym failed for exit\n");
     funcs.pthread_exit = (void (*)(void *))dlsym(RTLD_NEXT, "pthread_exit");
+    if (funcs.pthread_exit == NULL) fprintf(stderr, "dlsym failed for pthread_exit\n");
     funcs.fork = (pid_t(*)(void))dlsym(RTLD_NEXT, "fork");
-
-    memset(&trace, 0, sizeof(TRACER));
-    trace.option.use_ringbuffer = 0; // not used
-    trace.option.use_timestamp = 1;
-    trace.option.max_threadNum = 100; // not used
-    trace.option.use_cputime = 1;
+    if (funcs.fork == NULL) fprintf(stderr, "dlsym failed for fork\n");
 
     changeTraceOption(&trace.option);
 
@@ -388,13 +436,12 @@ void tracer_backtrack(int fd)
 
     if (trace.option.use_backtrack)
     {
-        for (i = 4; i != 0; i--)
+        for (i = trace.option.max_backtrack_num - 1; i != 0; i--)
         {
             char buf[256];
             int pos = (trace.ring[idx]->top - i) % trace.option.max_ringbufferItemNum;
             TRACER_INFO *ti = (TRACER_INFO *)(trace.ring[idx]->buffer) + trace.ring[idx]->itemSize * pos;
-            snprintf(buf, 255, "ThreadID:%d %s\n", ti->thread_id, ti->func);
-            write(fd, buf, strnlen(buf, 255));
+            print_traceinfo(fd, ti);
         }
     }
 }
@@ -413,15 +460,15 @@ char *getFuncAddr(uintptr_t addr)
     return symbol_info.function;
 }
 
-int dumpFuncInfo(int thread_id, const char *caller, const char *hookFuncName)
+int dumpFuncInfo(const char *state, int thread_id, const char *caller, const char *hookFuncName)
 {
     char buf[MAX_LINE_LEN + 1];
     struct timespec time, timeOfThreadProcess;
 
     clock_gettime(CLOCK_MONOTONIC, &time);
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &timeOfThreadProcess);
-    snprintf(buf, MAX_LINE_LEN, "E,%d,%s,%ld,%ld,%ld,%ld,%s\n",
-        thread_id, caller,
+    snprintf(buf, MAX_LINE_LEN, "%s,%d,%s,%ld,%ld,%ld,%ld,%s\n",
+        state, thread_id, caller,
         time.tv_sec, time.tv_nsec, timeOfThreadProcess.tv_sec, timeOfThreadProcess.tv_nsec, hookFuncName);
     return write(fd, buf, strnlen(buf, MAX_LINE_LEN));
 }
@@ -436,10 +483,10 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     int ret = 0;
     char *symbol = getCaller(2);
     char *start_routine_symbol = getFuncAddr((uintptr_t)start_routine);
-
+    
     ret = funcs.pthread_create(thread, attr, start_routine, arg);
     snprintf(funcname, MAX_LINE_LEN, "pthread_create %s %ld", start_routine_symbol, *thread);
-    dumpFuncInfo(thread_id, symbol, funcname);
+    dumpFuncInfo("E", thread_id, symbol, funcname);
     free(symbol);
     free(start_routine_symbol);
     return ret;
@@ -453,11 +500,11 @@ int pthread_join(pthread_t th, void **thread_return)
     int ret = 0;
     char *symbol = getCaller(2);
 
-    snprintf(funcname, MAX_LINE_LEN, "[IN ]pthread_join %ld", th);
-    dumpFuncInfo(thread_id, symbol, funcname);
+    snprintf(funcname, MAX_LINE_LEN, "pthread_join %ld", th);
+    dumpFuncInfo("EI", thread_id, symbol, funcname);
     ret = funcs.pthread_join(th, thread_return);
-    snprintf(funcname, MAX_LINE_LEN, "[OUT]pthread_join %ld", th);
-    dumpFuncInfo(thread_id, symbol, funcname);
+    snprintf(funcname, MAX_LINE_LEN, "pthread_join %ld", th);
+    dumpFuncInfo("EO", thread_id, symbol, funcname);
     free(symbol);
     return ret;
 }
@@ -468,7 +515,7 @@ void pthread_exit(void *retval)
     int thread_id = syscall(SYS_gettid);
     char *symbol = getCaller(2);
 
-    dumpFuncInfo(thread_id, symbol, "pthread_exit");
+    dumpFuncInfo("E", thread_id, symbol, "pthread_exit");
     free(symbol);
     funcs.pthread_exit(retval);
 }
@@ -479,7 +526,7 @@ void exit(int status)
     int thread_id = syscall(SYS_gettid);
     char *symbol = getCaller(2);
 
-    dumpFuncInfo(thread_id, symbol, "exit");
+    dumpFuncInfo("E", thread_id, symbol, "exit");
     free(symbol);
     funcs.exit(status);
 }
@@ -490,7 +537,7 @@ pid_t fork(void)
     int thread_id = syscall(SYS_gettid);
     char *symbol = getCaller(2);
 
-    dumpFuncInfo(thread_id, symbol, "fork");
+    dumpFuncInfo("E", thread_id, symbol, "fork");
     free(symbol);
     return funcs.fork();
 }
