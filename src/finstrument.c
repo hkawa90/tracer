@@ -374,15 +374,10 @@ void main_constructor(void)
     init_trace_backtrace();
 
     funcs.pthread_create = (int (*)(pthread_t *, const pthread_attr_t *, void *(*r)(void *), void *))dlsym(RTLD_NEXT, "pthread_create");
-    if (funcs.pthread_create == NULL) fprintf(stderr, "dlsym failed for pthread_create\n");
     funcs.pthread_join = (int (*)(pthread_t, void **))dlsym(RTLD_NEXT, "pthread_join");
-    if (funcs.pthread_join == NULL) fprintf(stderr, "dlsym failed for pthread_join\n");
     funcs.exit = (void (*)(int))dlsym(RTLD_NEXT, "exit");
-    if (funcs.exit == NULL) fprintf(stderr, "dlsym failed for exit\n");
     funcs.pthread_exit = (void (*)(void *))dlsym(RTLD_NEXT, "pthread_exit");
-    if (funcs.pthread_exit == NULL) fprintf(stderr, "dlsym failed for pthread_exit\n");
     funcs.fork = (pid_t(*)(void))dlsym(RTLD_NEXT, "fork");
-    if (funcs.fork == NULL) fprintf(stderr, "dlsym failed for fork\n");
 
     changeTraceOption(&trace.option);
 
@@ -483,7 +478,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     int ret = 0;
     char *symbol = getCaller(2);
     char *start_routine_symbol = getFuncAddr((uintptr_t)start_routine);
-    
+    printf("IN pthread_create\n");
     ret = funcs.pthread_create(thread, attr, start_routine, arg);
     snprintf(funcname, MAX_LINE_LEN, "pthread_create %s %ld", start_routine_symbol, *thread);
     dumpFuncInfo("E", thread_id, symbol, funcname);
