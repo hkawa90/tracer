@@ -13,10 +13,11 @@ cd tracer
 
 ### Prerequisites
 
-動作はLinuxのみで、GCC(コンパイラ)を使用します。またライブラリとしてlibconfuseを使用しています。
+動作はLinuxのみで、GCC(コンパイラ)を使用します。またライブラリとしてlibconfuseを使用しています。またC++の関数名のデマングルのため、libibertyを使用しています。
 
 ```
 sudo apt-get install libconfuse-dev
+sudo apt-get install llibiberty-dev
 ```
 
 ### Installing
@@ -131,6 +132,7 @@ O,150285,doSomething,335466,673752107,0,132986
 EO,150284,main,335466,673796047,0,15763878,pthread_join 140241503631104
 O,150284,main,335466,673832331,0,15798250
 ```
+C++は上記`libtrace.so`を`libtrace++.so`に置き換えて、実行してください。
 
 ## License
 

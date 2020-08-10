@@ -16,6 +16,9 @@ extern "C"
 }
 #endif
 
+#ifdef __cplusplus
+#include <libiberty/demangle.h>
+#endif
 
 static struct hook_funcs funcs;
 
@@ -295,6 +298,9 @@ void write_traceinfo(struct info symbol_info, char status)
 {
     TRACER_INFO tr;
     int ret = 0;
+#ifdef __cplusplus
+    char *demangledStr;
+#endif
 
     if (trace.option.use_timestamp == 1)
     {
@@ -307,6 +313,15 @@ void write_traceinfo(struct info symbol_info, char status)
     tr.thread_id = syscall(SYS_gettid);
     tr.status = status;
     tr.func = symbol_info.function;
+
+#ifdef __cplusplus
+    demangledStr = cplus_demangle(tr.func, 0);
+    if (demangledStr != NULL) {
+      tr.func = demangledStr;
+      free(symbol_info.function);
+    }
+#endif
+
     if (trace.option.use_ringbuffer == 1)
     {
         push_ringbuffer(trace.ring[lookupThreadID(tr.thread_id)], &tr, sizeof(tr));
@@ -444,14 +459,40 @@ void tracer_backtrack(int fd)
 char *getCaller(int depth)
 {
     struct info symbol_info;
+#ifdef __cplusplus
+    char *demangledStr;
+#endif
+
     trace_backtrace(depth + 1, &symbol_info);
+
+#ifdef __cplusplus
+    demangledStr = cplus_demangle(symbol_info.function, 0);
+    if (demangledStr != NULL) {
+        free(symbol_info.function);
+        symbol_info.function = demangledStr;
+    }
+#endif
+
     return symbol_info.function;
 }
 
 char *getFuncAddr(uintptr_t addr)
 {
     struct info symbol_info;
+ #ifdef __cplusplus
+    char *demangledStr;
+#endif
+
     trace_backtrace_pcinfo(addr, &symbol_info);
+
+#ifdef __cplusplus
+    demangledStr = cplus_demangle(symbol_info.function, 0);
+    if (demangledStr != NULL) {
+        free(symbol_info.function);
+        symbol_info.function = demangledStr;
+    }
+#endif
+
     return symbol_info.function;
 }
 
@@ -478,7 +519,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     int ret = 0;
     char *symbol = getCaller(2);
     char *start_routine_symbol = getFuncAddr((uintptr_t)start_routine);
-    printf("IN pthread_create\n");
+
     ret = funcs.pthread_create(thread, attr, start_routine, arg);
     snprintf(funcname, MAX_LINE_LEN, "pthread_create %s %ld", start_routine_symbol, *thread);
     dumpFuncInfo("E", thread_id, symbol, funcname);
