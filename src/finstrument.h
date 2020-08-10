@@ -46,6 +46,7 @@ typedef struct tracer_option {
     int max_backtrack_num;
     int max_threadNum;
     int max_ringbufferItemNum;
+    int use_source;
 } TRACER_OPTION;
 
 
@@ -63,9 +64,10 @@ typedef struct tracer_info {
     struct timespec time;
     struct timespec timeOfThreadProcess;
     int thread_id;
-
     char status;
     char *func;
+    int lineNum;
+    char *filename;
 } TRACER_INFO;
 
 struct hook_funcs {

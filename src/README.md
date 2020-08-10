@@ -140,7 +140,7 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 
 ## TODO
 
-- [ ] Add line number to trace.dat
-- [ ] Add module path to trace.dat
+- [x] Add line number to trace.dat
+- [x] Add module path to trace.dat
 - [ ] Add event output
 - [ ] Test
