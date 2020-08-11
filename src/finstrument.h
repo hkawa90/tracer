@@ -46,7 +46,8 @@ typedef struct tracer_option {
     int max_backtrack_num;
     int max_threadNum;
     int max_ringbufferItemNum;
-    int use_source;
+    int use_sourceline;
+    int use_mcheck;
 } TRACER_OPTION;
 
 
@@ -82,13 +83,26 @@ struct hook_funcs {
 #define TRACE_CONF_PATH	            "tracer.conf"
 #define MAX_BACK_TRACK_NUM			(5)
 #define MAX_LINE_LEN                (255)
-#ifndef _FINSTRUMENT_
-extern void tracer_backtrack(int fd);
-extern int changeTraceOption(TRACER_OPTION *tp);
-extern int writeRingbuffer(int fd);
-#endif
 
+extern void tracer_backtrack(int fd);
+extern int writeRingbuffer(int fd);
+extern int tracer_event(const char *msg);
+extern int tracer_event_in(const char *msg);
+extern int tracer_event_out(const char *msg);
+extern void *tracer_realloc(void *ptr, size_t size);
+extern void *tracer_calloc(size_t nmemb, size_t size);
+extern void tracer_free(void *ptr);
+extern void *tracer_malloc(size_t size);
 #endif // FINSTRUMENT_H
+
+// REPLACE GLIBC MALLOC 
+
+#ifdef REPLACE_GLIBC_ALLOC_FUNCS
+#define malloc(size)    tracer_malloc(size)
+#define free(ptr)       tracer_free(ptr)
+#define calloc(size)    tracer_calloc(size)
+#define realloc(size)   tracer_realloc(size)
+#endif
 
 #ifdef __cplusplus
 };

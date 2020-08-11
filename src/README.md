@@ -134,13 +134,73 @@ O,150284,main,335466,673832331,0,15798250
 ```
 C++は上記`libtrace.so`を`libtrace++.so`に置き換えて、実行してください。
 
+### Configuration
+
+`libconfuse`を使った初設定を`racer.conf`ファイルに記述して動作を変更可能です。
+
+```
+# ライン行、モジュールパスをトレース情報に追加します.無効とする場合は0を代入.
+use_sourceline=1
+# GCCのmtraceを有効にします.無効とする場合は0を代入.
+use_mcheck=1
+```
+
+`use_mcheck=1`とした場合は、環境変数`MALLOC_TRACE`でログ出力先を指定してください。
+
+```
+export MALLOC_TRACE="/tmp/mtrace.log"
+./sample
+mtrace ./sample $MALLOC_TRACE
+```
+
+### 独自イベント
+
+、動的リンクすることで`finstrument.h`に公開しているAPIでトレース情報にユーザ独自メッセージを記録できます。
+
+```
+extern int tracer_event(const char *msg);
+extern int tracer_event_in(const char *msg);
+extern int tracer_event_out(const char *msg);
+```
+またヘッダ`finstrument.h`の前に`REPLACE_GLIBC_ALLOC_FUNCS`を`define`することで、`malloc`,`free`, `calloc`,`realloc`のトレース情報を取得できます。
+
+```
+#include <stdio.h>
+#include <stdlib.h>
+
+#define REPLACE_GLIBC_ALLOC_FUNCS
+#include "finstrument.h"
+
+main()
+{
+    void *ptr;
+
+    ptr = malloc(5);
+}
+```
+上記をコンパイルして動的リンクします。
+
+```
+gcc -c -g -finstrument-functions -DFINSTRUMENT sample.c
+gcc -o sample sample.o -lpthread -ltrace -L.
+```
+
+上記を実行した結果: main関数で5バイトmallocしたことがわかります。
+```
+I,18027,main,16681,264597108,0,10147387
+E,18027,main,16681,264722077,0,10277895,(0x559f6b15fa50)malloc(5)
+O,18027,main,16681,264791670,0,10346411
+
+```
+
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
+This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details
 
 ## TODO
 
 - [x] Add line number to trace.dat
 - [x] Add module path to trace.dat
-- [ ] Add event output
+- [x] Add event output
+- [x] Allocaton history
 - [ ] Test

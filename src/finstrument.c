@@ -9,6 +9,7 @@ extern "C"
     #include <limits.h>
     #include <sys/stat.h>
     #include <confuse.h>
+    #include <mcheck.h>
     #include "finstrument.h"
     #include "bt.h"
 
@@ -72,10 +73,6 @@ struct info *getCaller(int)
 char *resolveFuncName(uintptr_t addr)
     __attribute__((no_instrument_function));
 
-int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
-    void *(*start_routine)(void *), void *arg)
-    __attribute__((no_instrument_function));
-
 int dumpFuncInfo(const char *state, int thread_id, struct info *caller, const char *hookFuncName)
     __attribute__((no_instrument_function));
 
@@ -96,6 +93,27 @@ pid_t fork(void)
     __attribute__((no_instrument_function));
 
 int isExistFile(const char*)
+    __attribute__((no_instrument_function));
+
+void *tracer_malloc(size_t size)
+    __attribute__((no_instrument_function));
+
+void tracer_free(void *ptr)
+    __attribute__((no_instrument_function));
+
+void *tracer_calloc(size_t nmemb, size_t size)
+    __attribute__((no_instrument_function));
+
+void *tracer_realloc(void *ptr, size_t size)
+    __attribute__((no_instrument_function));
+
+int tracer_event(const char *msg)
+    __attribute__((no_instrument_function));
+
+int tracer_event_in(const char *msg)
+    __attribute__((no_instrument_function));
+
+int tracer_event_out(const char *msg)
     __attribute__((no_instrument_function));
 
 #ifdef __cplusplus
@@ -282,7 +300,7 @@ int print_traceinfo(int fd, TRACER_INFO *tr)
         tr->time.tv_nsec,
         tr->timeOfThreadProcess.tv_sec,
         tr->timeOfThreadProcess.tv_nsec);
-    if (trace.option.use_source == 1) {
+    if (trace.option.use_sourceline == 1) {
         char lineNoStr[MAX_LINE_LEN + 1];
         strncat(buf, ",", MAX_LINE_LEN);
         strncat(buf, tr->filename, MAX_LINE_LEN);
@@ -363,7 +381,8 @@ void main_constructor(void)
         CFG_INT("max_backtrack_num", 10, CFGF_NONE),
         CFG_INT("max_threadNum", 100, CFGF_NONE),
         CFG_INT("max_ringbufferItemNum", 100, CFGF_NONE),
-        CFG_INT("use_source", 0, CFGF_NONE),
+        CFG_INT("use_sourceline", 0, CFGF_NONE),
+        CFG_INT("use_mcheck", 0, CFGF_NONE),
         CFG_END()
     };
     cfg_t *cfg;
@@ -383,7 +402,8 @@ void main_constructor(void)
         trace.option.max_backtrack_num = cfg_getint(cfg, "max_backtrack_num");
         trace.option.max_threadNum = cfg_getint(cfg, "max_threadNum");
         trace.option.max_ringbufferItemNum = cfg_getint(cfg, "max_ringbufferItemNum");
-        trace.option.use_source = cfg_getint(cfg, "use_source");
+        trace.option.use_sourceline = cfg_getint(cfg, "use_sourceline");
+        trace.option.use_mcheck = cfg_getint(cfg, "use_mcheck");
         cfg_free(cfg);
     }
     else {
@@ -394,7 +414,8 @@ void main_constructor(void)
         trace.option.max_backtrack_num = 10;
         trace.option.max_threadNum = 100;
         trace.option.max_ringbufferItemNum = 100;
-        trace.option.use_source = 0;
+        trace.option.use_sourceline = 0;
+        trace.option.use_mcheck = 0;
     }
     init_trace_backtrace();
 
@@ -422,6 +443,9 @@ void main_constructor(void)
     }
     pthread_mutex_init(&trace.trace_write_mutex, NULL);
     pthread_mutex_init(&trace.trace_lookup_mutex, NULL);
+    if (trace.option.use_mcheck == 1) {
+        mtrace();
+    }
 }
 
 /**
@@ -432,6 +456,9 @@ void main_constructor(void)
 void main_deconstructor(void)
 {
     close(fd);
+    if (trace.option.use_mcheck == 1) {
+        muntrace();
+    }
 }
 
 void __cyg_profile_func_enter(void *addr, void *callsite)
@@ -516,7 +543,7 @@ int dumpFuncInfo(const char *state, int thread_id, struct info *caller, const ch
     snprintf(buf, MAX_LINE_LEN, "%s,%d,%s,%ld,%ld,%ld,%ld,%s",
         state, thread_id, caller->function,
         time.tv_sec, time.tv_nsec, timeOfThreadProcess.tv_sec, timeOfThreadProcess.tv_nsec, hookFuncName);
-    if (trace.option.use_source == 1) {
+    if (trace.option.use_sourceline == 1) {
       char lineNoStr[MAX_LINE_LEN + 1];
       strncat(buf, ",", MAX_LINE_LEN);
       strncat(buf, caller->filename, MAX_LINE_LEN);
@@ -605,4 +632,103 @@ pid_t fork(void)
     free(symbol->function);
     free(symbol);
     return funcs.fork();
+}
+
+
+void *tracer_malloc(size_t size)
+{
+    char buf[MAX_LINE_LEN + 1];
+    void *ptr;
+    int thread_id = syscall(SYS_gettid);
+    struct info *symbol = getCaller(2);
+
+    ptr = malloc(size);
+    snprintf(buf, MAX_LINE_LEN, "(%p)malloc(%d)", ptr, size);
+    dumpFuncInfo("E", thread_id, symbol, buf);
+    free(symbol->filename);
+    free(symbol->function);
+    free(symbol);
+    return ptr;
+}
+
+void tracer_free(void *ptr)
+{
+    char buf[MAX_LINE_LEN + 1];
+    int thread_id = syscall(SYS_gettid);
+    struct info *symbol = getCaller(2);
+
+    snprintf(buf, MAX_LINE_LEN, "free(%p)", ptr);
+    dumpFuncInfo("E", thread_id, symbol, buf);
+    free(symbol->filename);
+    free(symbol->function);
+    free(symbol);
+    return free(ptr);
+}
+
+void *tracer_calloc(size_t nmemb, size_t size)
+{
+    char buf[MAX_LINE_LEN + 1];
+    void *ptr;
+    int thread_id = syscall(SYS_gettid);
+    struct info *symbol = getCaller(2);
+
+    ptr = calloc(nmemb, size);
+    snprintf(buf, MAX_LINE_LEN, "(%p)calloc(%p,%d)", ptr, nmemb, size);
+    dumpFuncInfo("E", thread_id, symbol, buf);
+    free(symbol->filename);
+    free(symbol->function);
+    free(symbol);
+    return ptr;
+}
+
+void *tracer_realloc(void *src, size_t size)
+{
+    char buf[MAX_LINE_LEN + 1];
+    void *ptr;
+    int thread_id = syscall(SYS_gettid);
+    struct info *symbol = getCaller(2);
+
+    ptr = realloc(src, size);
+    snprintf(buf, MAX_LINE_LEN, "(%p)realloc(%p,%d)", ptr, src, size);
+    dumpFuncInfo("E", thread_id, symbol, buf);
+    free(symbol->filename);
+    free(symbol->function);
+    free(symbol);
+    return ptr;
+}
+
+int tracer_event(const char *msg)
+{
+    int thread_id = syscall(SYS_gettid);
+    struct info *symbol = getCaller(2);
+
+    dumpFuncInfo("UE", thread_id, symbol, msg);
+    free(symbol->filename);
+    free(symbol->function);
+    free(symbol);
+    return 0;
+}
+
+int tracer_event_in(const char *msg)
+{
+    int thread_id = syscall(SYS_gettid);
+    struct info *symbol = getCaller(2);
+
+    dumpFuncInfo("UEI", thread_id, symbol, msg);
+    free(symbol->filename);
+    free(symbol->function);
+    free(symbol);
+    return 0;
+}
+
+int tracer_event_out(const char *msg)
+{
+    int thread_id = syscall(SYS_gettid);
+    struct info *symbol = getCaller(2);
+
+    dumpFuncInfo("UEO", thread_id, symbol, msg);
+    free(symbol->filename);
+    free(symbol->function);
+    free(symbol);
+    return 0;
 }
