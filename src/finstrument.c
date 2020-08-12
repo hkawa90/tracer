@@ -27,11 +27,22 @@ static struct hook_funcs funcs;
 extern "C"
 {
 #endif
+typedef struct tracer_info_tag {
+    struct info *info;
+    const char *id;
+    int pid;
+    struct timespec time;
+    struct timespec timeOfThreadProcess;
+    char *info1;
+    char *info2;
+    char *info3;
+} TRACER_INFO;
+
 /* Function prototypes with attributes */
 int print_traceinfo(int fd, TRACER_INFO *tr)
     __attribute__((no_instrument_function));
 
-void write_traceinfo(struct info, char status)
+void write_traceinfo(struct info *, const char *status)
     __attribute__((no_instrument_function));
 
 int write_ringbuffer(void *, size_t size)
@@ -73,7 +84,10 @@ struct info *getCaller(int)
 char *resolveFuncName(uintptr_t addr)
     __attribute__((no_instrument_function));
 
-int dumpFuncInfo(const char *state, int thread_id, struct info *caller, const char *hookFuncName)
+void print_def_info(char *buffer, TRACER_INFO *info)
+    __attribute__((no_instrument_function));
+
+int dumpFuncInfo(TRACER_INFO *info)
     __attribute__((no_instrument_function));
 
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
@@ -84,10 +98,10 @@ int pthread_join(pthread_t th, void **thread_return)
     __attribute__((no_instrument_function));
 
 void pthread_exit(void *retval)
-    __attribute__((no_instrument_function));
+    __attribute__((no_instrument_function, noreturn));
 
 void exit(int status)
-    __attribute__((no_instrument_function));
+    __attribute__((no_instrument_function, noreturn));
 
 pid_t fork(void)
     __attribute__((no_instrument_function));
@@ -114,6 +128,12 @@ int tracer_event_in(const char *msg)
     __attribute__((no_instrument_function));
 
 int tracer_event_out(const char *msg)
+    __attribute__((no_instrument_function));
+
+int tracer_event_in_r(uuid_t id, const char *msg)
+    __attribute__((no_instrument_function));
+
+int tracer_event_out_r(uuid_t id, const char *msg)
     __attribute__((no_instrument_function));
 
 #ifdef __cplusplus
@@ -199,6 +219,7 @@ void app_signal_handler(int sig, siginfo_t *info, void *ctx)
  */
 int lookupThreadID(int thread_id)
 {
+#if 0
     int i;
 
     pthread_mutex_lock(&trace.trace_lookup_mutex);
@@ -219,6 +240,7 @@ int lookupThreadID(int thread_id)
     trace.lookupThreadIDNum++;
     pthread_mutex_unlock(&trace.trace_lookup_mutex);
     return trace.lookupThreadIDNum - 1;
+#endif
 }
 
 /**
@@ -229,6 +251,7 @@ int lookupThreadID(int thread_id)
  */
 int writeRingbuffer(int fd)
 {
+#if 0
     TRACER_INFO tr;
     int i, j, ret = 0;
 
@@ -252,6 +275,7 @@ int writeRingbuffer(int fd)
             break;
     }
     return ret;
+#endif
 }
 
 /**
@@ -264,6 +288,7 @@ int writeRingbuffer(int fd)
  */
 int push_ringbuffer(RINGBUFFER *ring, void *data, size_t size)
 {
+#if 0
     int pos = 0, cur_pos = 0;
     if (ring->itemSize < size)
     {
@@ -283,16 +308,17 @@ int push_ringbuffer(RINGBUFFER *ring, void *data, size_t size)
     // update top
     ring->top = (ring->top + 1) % ring->itemNumber;
     return 0;
+#endif
 }
 
 
-
+#if 0
 int print_traceinfo(int fd, TRACER_INFO *tr)
 {
     int err;
-    char buf[MAX_LINE_LEN + 1];
+    char buf[MAX_LINE_LEN + 1] = {0};
 
-    snprintf(buf, MAX_LINE_LEN, "%c,%d,%s,%ld,%ld,%ld,%ld",
+    snprintf(buf, MAX_LINE_LEN, "%c,%d,%s,%ld,%ld,%ld,%ld,,,",
         tr->status,
         tr->thread_id,
         tr->func,
@@ -314,6 +340,7 @@ int print_traceinfo(int fd, TRACER_INFO *tr)
     free(tr->func);
     return err;
 }
+#endif
 
 /**
  * @brief          push trace information to ringbuffer
@@ -323,7 +350,7 @@ int print_traceinfo(int fd, TRACER_INFO *tr)
  * @param          (char status) exit or enter
  * @return         void
  */
-void write_traceinfo(struct info symbol_info, char status)
+void write_traceinfo(struct info *symbol_info, const char *status)
 {
     TRACER_INFO tr;
     int ret = 0;
@@ -331,37 +358,20 @@ void write_traceinfo(struct info symbol_info, char status)
     char *demangledStr;
 #endif
 
-    if (trace.option.use_timestamp == 1)
-    {
-        if (trace.option.use_cputime == 1)
-        {
-            clock_gettime(CLOCK_THREAD_CPUTIME_ID, &tr.timeOfThreadProcess);
-        }
-        clock_gettime(CLOCK_MONOTONIC, &tr.time);
-    }
-    tr.thread_id = syscall(SYS_gettid);
-    tr.status = status;
-    tr.func = symbol_info.function;
-    tr.lineNum = symbol_info.lineno;
-    tr.filename = symbol_info.filename;
-
-#ifdef __cplusplus
-    demangledStr = cplus_demangle(tr.func, 0);
-    if (demangledStr != NULL) {
-      tr.func = demangledStr;
-      free(symbol_info.function);
-    }
-#endif
+    memset(&tr, 0, sizeof(tr));
+    tr.pid = syscall(SYS_gettid);
+    tr.id = status;
+    tr.info = symbol_info;
 
     if (trace.option.use_ringbuffer == 1)
     {
+#if 0
         push_ringbuffer(trace.ring[lookupThreadID(tr.thread_id)], &tr, sizeof(tr));
+#endif
     }
     else
     {
-        pthread_mutex_lock(&trace.trace_write_mutex);
-        print_traceinfo(fd, &tr);
-        pthread_mutex_unlock(&trace.trace_write_mutex);
+        dumpFuncInfo(&tr);
     }
 }
 
@@ -388,6 +398,7 @@ void main_constructor(void)
     cfg_t *cfg;
     const char *tracer_conf = getenv("TRACER_CONF");
     struct sigaction sa_sig;
+    char buf[MAX_LINE_LEN + 1] = {0};
 
     if ((tracer_conf == NULL) || (isExistFile(tracer_conf) == 0)) {
         tracer_conf = TRACE_CONF_PATH;
@@ -433,6 +444,7 @@ void main_constructor(void)
         fprintf(stderr, "Error: open(%d) %s\n", errno, strerror(errno));
         exit(-1);
     }
+
     memset(&sa_sig, 0, sizeof(sa_sig));
     sa_sig.sa_sigaction = app_signal_handler;
     sa_sig.sa_flags = SA_SIGINFO;
@@ -465,18 +477,23 @@ void __cyg_profile_func_enter(void *addr, void *callsite)
 {
     struct info symbol_info;
     trace_backtrace(2, &symbol_info);
-    write_traceinfo(symbol_info, 'I');
+    write_traceinfo(&symbol_info, "I");
+    free(symbol_info.filename);
+    free(symbol_info.function);
 }
 
 void __cyg_profile_func_exit(void *addr, void *callsite)
 {
     struct info symbol_info;
     trace_backtrace(2, &symbol_info);
-    write_traceinfo(symbol_info, 'O');
+    write_traceinfo(&symbol_info, "O");
+    free(symbol_info.filename);
+    free(symbol_info.function);
 }
 
 void tracer_backtrack(int fd)
 {
+#if 0
     int i;
     int thread_id = syscall(SYS_gettid);
     int idx = lookupThreadID(thread_id);
@@ -491,6 +508,7 @@ void tracer_backtrack(int fd)
             print_traceinfo(fd, ti);
         }
     }
+#endif
 }
 
 struct info *getCaller(int depth)
@@ -533,202 +551,378 @@ char *resolveFuncName(uintptr_t addr)
     return symbol_info.function;
 }
 
-int dumpFuncInfo(const char *state, int thread_id, struct info *caller, const char *hookFuncName)
+void print_def_info(char *buffer, TRACER_INFO *info)
 {
-    char buf[MAX_LINE_LEN + 1];
-    struct timespec time, timeOfThreadProcess;
-
-    clock_gettime(CLOCK_MONOTONIC, &time);
-    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &timeOfThreadProcess);
-    snprintf(buf, MAX_LINE_LEN, "%s,%d,%s,%ld,%ld,%ld,%ld,%s",
-        state, thread_id, caller->function,
-        time.tv_sec, time.tv_nsec, timeOfThreadProcess.tv_sec, timeOfThreadProcess.tv_nsec, hookFuncName);
-    if (trace.option.use_sourceline == 1) {
-      char lineNoStr[MAX_LINE_LEN + 1];
-      strncat(buf, ",", MAX_LINE_LEN);
-      strncat(buf, caller->filename, MAX_LINE_LEN);
-      strncat(buf, ",", MAX_LINE_LEN);
-      snprintf(lineNoStr, MAX_LINE_LEN, "%d", caller->lineno);
-      strncat(buf, lineNoStr, MAX_LINE_LEN);
+    char tmp_buf[MAX_LINE_LEN + 1] = {0};
+    *buffer = 0;
+    snprintf(tmp_buf, MAX_LINE_LEN, "{ id: \"%s\", ", info->id);
+    strcat(buffer, tmp_buf);
+    snprintf(tmp_buf, MAX_LINE_LEN, "pid: \"%d\", ", info->pid);
+    strcat(buffer, tmp_buf);
+    snprintf(tmp_buf, MAX_LINE_LEN, "function: \"%s\", ", info->info->function);
+    strcat(buffer, tmp_buf);
+    snprintf(tmp_buf, MAX_LINE_LEN, "time1_sec: %ld, ", info->time.tv_sec);
+    strcat(buffer, tmp_buf);
+    snprintf(tmp_buf, MAX_LINE_LEN, "time1_nsec: %ld, ", info->time.tv_nsec);
+    strcat(buffer, tmp_buf);
+    snprintf(tmp_buf, MAX_LINE_LEN, "time2_sec: %ld, ", info->timeOfThreadProcess.tv_sec);
+    strcat(buffer, tmp_buf);
+    snprintf(tmp_buf, MAX_LINE_LEN, "time2_nsec: %ld, ", info->timeOfThreadProcess.tv_nsec);
+    strcat(buffer, tmp_buf);
+    if (info->info1 == NULL) {
+        strcat(buffer, "info1:\"\",");
+    } else {
+        strcat(buffer, "info1:\"");
+        strcat(buffer, info->info1);
+        strcat(buffer, "\"");
+        strcat(buffer, ",");
     }
-    strncat(buf, "\n", MAX_LINE_LEN);
-    return write(fd, buf, strnlen(buf, MAX_LINE_LEN));
+    if (info->info2 == NULL) {
+        strcat(buffer, "info2:\"\",");
+    } else {
+        strcat(buffer, "info2:\"");
+        strcat(buffer, info->info2);
+        strcat(buffer, "\"");
+        strcat(buffer, ",");
+    }
+    if (info->info3 == NULL) {
+        strcat(buffer, "info3:\"\",");
+    } else {
+        strcat(buffer, "info3:\"");
+        strcat(buffer, info->info3);
+        strcat(buffer, "\"");
+        strcat(buffer, ",");
+    }
+    if ((trace.option.use_sourceline == 0) || (info->info->filename == NULL)) {
+        strcat(buffer, "filename:\"\",");
+    } else {
+        strcat(buffer, "filename:\"");
+        strcat(buffer, info->info->filename);
+        strcat(buffer, "\"");
+        strcat(buffer, ",");
+    }
+    if (trace.option.use_sourceline == 1) {
+        snprintf(tmp_buf, MAX_LINE_LEN, "lineno: %d }\n", info->info->lineno);
+    } else {
+        strcat(buffer, "lineno:0 }\n");
+    }
+    
+    strcat(buffer, tmp_buf);
+}
+
+int dumpFuncInfo(TRACER_INFO *info)
+{
+    int ret = 0;
+    char buf[MAX_LINE_LEN + 1] = {0};
+    struct timespec time, timeOfThreadProcess;
+#ifdef __cplusplus
+    char *demangledStr;
+#endif
+
+    pthread_mutex_lock(&trace.trace_write_mutex);
+    if (trace.option.use_timestamp == 1)
+    {
+        if (trace.option.use_cputime == 1)
+        {
+            clock_gettime(CLOCK_THREAD_CPUTIME_ID, &info->timeOfThreadProcess);
+        }
+        clock_gettime(CLOCK_MONOTONIC, &info->time);
+    }
+#ifdef __cplusplus
+    demangledStr = cplus_demangle(info->info->function, 0);
+    if (demangledStr != NULL) {
+      free(info->info->function);
+      info->info->function = demangledStr;
+    }
+#endif
+    print_def_info(buf, info);
+    pthread_mutex_unlock(&trace.trace_write_mutex);
+    ret = write(fd, buf, strnlen(buf, MAX_LINE_LEN));
+    return ret;
 }
 
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     void *(*start_routine)(void *), void *arg)
 {
-    char buf[MAX_LINE_LEN + 1];
-    char funcname[MAX_LINE_LEN + 1];
-    int thread_id = syscall(SYS_gettid);
-    struct timespec time, timeOfThreadProcess;
+    char buf[MAX_LINE_LEN + 1] = {0};
+    char buf1[MAX_LINE_LEN + 1] = {0};
+    TRACER_INFO info;
     int ret = 0;
-    struct info *symbol = getCaller(2);
     char *start_routine_symbol = resolveFuncName((uintptr_t)start_routine);
 
+    memset(&info, 0, sizeof(info));
     ret = funcs.pthread_create(thread, attr, start_routine, arg);
-    snprintf(funcname, MAX_LINE_LEN, "pthread_create %s %ld", start_routine_symbol, *thread);
-    dumpFuncInfo("E", thread_id, symbol, funcname);
-    free(symbol->filename);
-    free(symbol->function);
-    free(symbol);
+    snprintf(buf, MAX_LINE_LEN, "(%d)pthread_create(%s,%ld)", ret, start_routine_symbol, *thread);
+    snprintf(buf1, MAX_LINE_LEN, "%ld", *thread);
+
+    info.id = "E";
+    info.pid = syscall(SYS_gettid);
+    info.info = getCaller(2);
+    info.info1 = buf1;
+    info.info2 = (char *)"pthread_exit";  
+    dumpFuncInfo(&info);
+    free(info.info->filename);
+    free(info.info->function);
+    free(info.info);
     free(start_routine_symbol);
     return ret;
 }
 
 int pthread_join(pthread_t th, void **thread_return)
 {
-    char buf[MAX_LINE_LEN + 1];
-    char funcname[MAX_LINE_LEN + 1];
+    char buf[MAX_LINE_LEN + 1] = {0};
+    char buf1[MAX_LINE_LEN + 1] = {0};
+    TRACER_INFO info;
     int thread_id = syscall(SYS_gettid);
     int ret = 0;
-    struct info *symbol = getCaller(2);
 
-    snprintf(funcname, MAX_LINE_LEN, "pthread_join %ld", th);
-    dumpFuncInfo("EI", thread_id, symbol, funcname);
+    memset(&info, 0, sizeof(info));
+
+    snprintf(buf, MAX_LINE_LEN, "%ld", th);
+
+    info.id = "EI";
+    info.pid = syscall(SYS_gettid);
+    info.info = getCaller(2);
+    info.info1 = buf;
+    info.info2 = (char *)"pthread_join";
+    dumpFuncInfo(&info);
+
     ret = funcs.pthread_join(th, thread_return);
-    snprintf(funcname, MAX_LINE_LEN, "pthread_join %ld", th);
-    dumpFuncInfo("EO", thread_id, symbol, funcname);
-    free(symbol->filename);
-    free(symbol->function);
-    free(symbol);
+
+    snprintf(buf1, MAX_LINE_LEN, "(%d)pthread_join", ret);
+
+    info.id = "EO";
+    info.info2 = buf1;
+    dumpFuncInfo(&info);
+    free(info.info->filename);
+    free(info.info->function);
+    free(info.info);
     return ret;
 }
 
 void pthread_exit(void *retval)
 {
-    char buf[MAX_LINE_LEN + 1];
-    int thread_id = syscall(SYS_gettid);
-    struct info *symbol = getCaller(2);
+    char buf[MAX_LINE_LEN + 1] = {0};
+    TRACER_INFO info;
 
-    dumpFuncInfo("E", thread_id, symbol, "pthread_exit");
-    free(symbol->filename);
-    free(symbol->function);
-    free(symbol);
+    memset(&info, 0, sizeof(info));
+    info.id = "E";
+    info.pid = syscall(SYS_gettid);
+    info.info = getCaller(2);
+    info.info2 = (char *)"pthread_exit";  
+    dumpFuncInfo(&info);
+    free(info.info->filename);
+    free(info.info->function);
+    free(info.info);
     funcs.pthread_exit(retval);
 }
 
 void exit(int status)
 {
-    char buf[MAX_LINE_LEN + 1];
-    int thread_id = syscall(SYS_gettid);
-    struct info *symbol = getCaller(2);
+    char buf[MAX_LINE_LEN + 1] = {0};
+    TRACER_INFO info;
 
-    dumpFuncInfo("E", thread_id, symbol, "exit");
-    free(symbol->filename);
-    free(symbol->function);
-    free(symbol);
+    snprintf(buf, MAX_LINE_LEN, "exit(%d)", status);
+
+    memset(&info, 0, sizeof(info));
+    info.id = "E";
+    info.pid = syscall(SYS_gettid);
+    info.info = getCaller(2);
+    info.info2 = buf;  
+    dumpFuncInfo(&info);
+    free(info.info->filename);
+    free(info.info->function);
+    free(info.info);
     funcs.exit(status);
 }
 
 pid_t fork(void)
 {
-    char buf[MAX_LINE_LEN + 1];
-    int thread_id = syscall(SYS_gettid);
-    struct info *symbol = getCaller(2);
-
-    dumpFuncInfo("E", thread_id, symbol, "fork");
-    free(symbol->filename);
-    free(symbol->function);
-    free(symbol);
+    char buf[MAX_LINE_LEN + 1] = {0};
+    TRACER_INFO info;
+ 
+    memset(&info, 0, sizeof(info));
+    info.id = "E";
+    info.pid = syscall(SYS_gettid);
+    info.info = getCaller(2);
+    info.info2 = (char *)"fork";  
+    dumpFuncInfo(&info);
+    free(info.info->filename);
+    free(info.info->function);
+    free(info.info);
     return funcs.fork();
 }
 
 
 void *tracer_malloc(size_t size)
 {
-    char buf[MAX_LINE_LEN + 1];
+    char buf[MAX_LINE_LEN + 1] = {0};
+    TRACER_INFO info;
     void *ptr;
-    int thread_id = syscall(SYS_gettid);
-    struct info *symbol = getCaller(2);
 
+    memset(&info, 0, sizeof(info));
     ptr = malloc(size);
-    snprintf(buf, MAX_LINE_LEN, "(%p)malloc(%d)", ptr, size);
-    dumpFuncInfo("E", thread_id, symbol, buf);
-    free(symbol->filename);
-    free(symbol->function);
-    free(symbol);
+    snprintf(buf, MAX_LINE_LEN, "(%p)malloc(%lu)", ptr, size);
+
+    info.id = "E";
+    info.pid = syscall(SYS_gettid);
+    info.info = getCaller(2);
+    info.info2 = buf;  
+    dumpFuncInfo(&info);
+    free(info.info->filename);
+    free(info.info->function);
+    free(info.info);
     return ptr;
 }
 
 void tracer_free(void *ptr)
 {
-    char buf[MAX_LINE_LEN + 1];
-    int thread_id = syscall(SYS_gettid);
-    struct info *symbol = getCaller(2);
+    char buf[MAX_LINE_LEN + 1] = {0};
+    TRACER_INFO info;
 
+    memset(&info, 0, sizeof(info));
     snprintf(buf, MAX_LINE_LEN, "free(%p)", ptr);
-    dumpFuncInfo("E", thread_id, symbol, buf);
-    free(symbol->filename);
-    free(symbol->function);
-    free(symbol);
+
+    info.id = "E";
+    info.pid = syscall(SYS_gettid);
+    info.info = getCaller(2);
+    info.info2 = buf;  
+    dumpFuncInfo(&info);
+    free(info.info->filename);
+    free(info.info->function);
+    free(info.info);
     return free(ptr);
 }
 
 void *tracer_calloc(size_t nmemb, size_t size)
 {
-    char buf[MAX_LINE_LEN + 1];
+    char buf[MAX_LINE_LEN + 1] = {0};
+    TRACER_INFO info;
     void *ptr;
-    int thread_id = syscall(SYS_gettid);
-    struct info *symbol = getCaller(2);
 
+    memset(&info, 0, sizeof(info));
     ptr = calloc(nmemb, size);
-    snprintf(buf, MAX_LINE_LEN, "(%p)calloc(%p,%d)", ptr, nmemb, size);
-    dumpFuncInfo("E", thread_id, symbol, buf);
-    free(symbol->filename);
-    free(symbol->function);
-    free(symbol);
+    snprintf(buf, MAX_LINE_LEN, "(%p)calloc(%lu,%lu)", ptr, nmemb, size);
+
+    info.id = "E";
+    info.pid = syscall(SYS_gettid);
+    info.info = getCaller(2);
+    info.info2 = buf;   
+    dumpFuncInfo(&info);
+    free(info.info->filename);
+    free(info.info->function);
+    free(info.info);
     return ptr;
 }
 
 void *tracer_realloc(void *src, size_t size)
 {
-    char buf[MAX_LINE_LEN + 1];
+    char buf[MAX_LINE_LEN + 1] = {0};
+    TRACER_INFO info;
     void *ptr;
-    int thread_id = syscall(SYS_gettid);
-    struct info *symbol = getCaller(2);
 
+    memset(&info, 0, sizeof(info));
     ptr = realloc(src, size);
-    snprintf(buf, MAX_LINE_LEN, "(%p)realloc(%p,%d)", ptr, src, size);
-    dumpFuncInfo("E", thread_id, symbol, buf);
-    free(symbol->filename);
-    free(symbol->function);
-    free(symbol);
+    snprintf(buf, MAX_LINE_LEN, "(%p)realloc(%p,%lu)", ptr, src, size);
+
+    info.id = "E";
+    info.pid = syscall(SYS_gettid);
+    info.info = getCaller(2);
+    info.info2 = buf;    
+    dumpFuncInfo(&info);
+    free(info.info->filename);
+    free(info.info->function);
+    free(info.info);
     return ptr;
 }
 
 int tracer_event(const char *msg)
 {
-    int thread_id = syscall(SYS_gettid);
-    struct info *symbol = getCaller(2);
+    TRACER_INFO info;
 
-    dumpFuncInfo("UE", thread_id, symbol, msg);
-    free(symbol->filename);
-    free(symbol->function);
-    free(symbol);
+    memset(&info, 0, sizeof(info));
+    info.id = "UE";
+    info.pid = syscall(SYS_gettid);
+    info.info = getCaller(2);
+    info.info2 = (char *)msg;
+    dumpFuncInfo(&info);
+    free(info.info->filename);
+    free(info.info->function);
+    free(info.info);
+    return 0;
+}
+
+int tracer_event_in_r(uuid_t id, const char *msg)
+{
+    TRACER_INFO info;
+    char *uuid_str = (char *)malloc(strlen(msg) + 37); 
+
+    memset(&info, 0, sizeof(info));
+    uuid_generate_time_safe(id);
+    uuid_unparse_lower(id, uuid_str);
+
+    info.id = "UEI";
+    info.pid = syscall(SYS_gettid);
+    info.info = getCaller(2);
+    info.info1 = uuid_str;
+    info.info2 = (char *)msg;
+    dumpFuncInfo(&info);
+    free(info.info->filename);
+    free(info.info->function);
+    free(info.info);
+    free(uuid_str);
+    return 0;
+}
+
+int tracer_event_out_r(uuid_t id, const char *msg)
+{
+    TRACER_INFO info;
+    char *uuid_str = (char *)malloc(strlen(msg) + 37); 
+
+    memset(&info, 0, sizeof(info));
+    uuid_unparse_lower(id, uuid_str);
+
+    info.id = "UEO";
+    info.pid = syscall(SYS_gettid);
+    info.info = getCaller(2);
+    info.info1 = uuid_str;
+    info.info2 = (char *)msg;
+    dumpFuncInfo(&info);
+    free(info.info->filename);
+    free(info.info->function);
+    free(info.info);
+    free(uuid_str);
     return 0;
 }
 
 int tracer_event_in(const char *msg)
 {
-    int thread_id = syscall(SYS_gettid);
-    struct info *symbol = getCaller(2);
+    TRACER_INFO info;
 
-    dumpFuncInfo("UEI", thread_id, symbol, msg);
-    free(symbol->filename);
-    free(symbol->function);
-    free(symbol);
+    memset(&info, 0, sizeof(info));
+    info.id = "UEI";
+    info.pid = syscall(SYS_gettid);
+    info.info = getCaller(2);
+    info.info2 = (char *)msg;
+    dumpFuncInfo(&info);
+    free(info.info->filename);
+    free(info.info->function);
+    free(info.info);
     return 0;
 }
 
 int tracer_event_out(const char *msg)
 {
-    int thread_id = syscall(SYS_gettid);
-    struct info *symbol = getCaller(2);
+    TRACER_INFO info;
 
-    dumpFuncInfo("UEO", thread_id, symbol, msg);
-    free(symbol->filename);
-    free(symbol->function);
-    free(symbol);
+    memset(&info, 0, sizeof(info));
+    info.id = "UEO";
+    info.pid = syscall(SYS_gettid);
+    info.info = getCaller(2);
+    info.info2 = (char *)msg;
+    dumpFuncInfo(&info);
+    free(info.info->filename);
+    free(info.info->function);
+    free(info.info);
     return 0;
 }

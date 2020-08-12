@@ -18,6 +18,7 @@ cd tracer
 ```
 sudo apt-get install libconfuse-dev
 sudo apt-get install llibiberty-dev
+sudo apt-get install uuid-dev
 ```
 
 ### Installing

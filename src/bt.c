@@ -139,5 +139,6 @@ int trace_backtrace_pcinfo(uintptr_t addr, struct info *symbol_info)
     symbol_info->function = bdata.all[0].function;
     symbol_info->lineno = bdata.all[0].lineno;
     symbol_info->filename = bdata.all[0].filename;
+    return 0;
 }
 
