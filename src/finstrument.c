@@ -393,6 +393,8 @@ void main_constructor(void)
         CFG_INT("max_ringbufferItemNum", 100, CFGF_NONE),
         CFG_INT("use_sourceline", 0, CFGF_NONE),
         CFG_INT("use_mcheck", 0, CFGF_NONE),
+        CFG_INT("use_fsync", 0, CFGF_NONE),
+        CFG_STR("output_format", "LJSON", CFGF_NONE),
         CFG_END()
     };
     cfg_t *cfg;
@@ -415,6 +417,8 @@ void main_constructor(void)
         trace.option.max_ringbufferItemNum = cfg_getint(cfg, "max_ringbufferItemNum");
         trace.option.use_sourceline = cfg_getint(cfg, "use_sourceline");
         trace.option.use_mcheck = cfg_getint(cfg, "use_mcheck");
+        trace.option.use_fsync = cfg_getint(cfg, "use_fsync");
+        trace.option.output_format = cfg_getstr(cfg, "output_format");
         cfg_free(cfg);
     }
     else {
@@ -427,6 +431,8 @@ void main_constructor(void)
         trace.option.max_ringbufferItemNum = 100;
         trace.option.use_sourceline = 0;
         trace.option.use_mcheck = 0;
+        trace.option.use_fsync = 0;
+        trace.option.output_format = "LJSON";
     }
     init_trace_backtrace();
 
@@ -555,58 +561,103 @@ void print_def_info(char *buffer, TRACER_INFO *info)
 {
     char tmp_buf[MAX_LINE_LEN + 1] = {0};
     *buffer = 0;
-    snprintf(tmp_buf, MAX_LINE_LEN, "{ id: \"%s\", ", info->id);
-    strcat(buffer, tmp_buf);
-    snprintf(tmp_buf, MAX_LINE_LEN, "pid: \"%d\", ", info->pid);
-    strcat(buffer, tmp_buf);
-    snprintf(tmp_buf, MAX_LINE_LEN, "function: \"%s\", ", info->info->function);
-    strcat(buffer, tmp_buf);
-    snprintf(tmp_buf, MAX_LINE_LEN, "time1_sec: %ld, ", info->time.tv_sec);
-    strcat(buffer, tmp_buf);
-    snprintf(tmp_buf, MAX_LINE_LEN, "time1_nsec: %ld, ", info->time.tv_nsec);
-    strcat(buffer, tmp_buf);
-    snprintf(tmp_buf, MAX_LINE_LEN, "time2_sec: %ld, ", info->timeOfThreadProcess.tv_sec);
-    strcat(buffer, tmp_buf);
-    snprintf(tmp_buf, MAX_LINE_LEN, "time2_nsec: %ld, ", info->timeOfThreadProcess.tv_nsec);
-    strcat(buffer, tmp_buf);
-    if (info->info1 == NULL) {
-        strcat(buffer, "info1:\"\",");
-    } else {
-        strcat(buffer, "info1:\"");
-        strcat(buffer, info->info1);
-        strcat(buffer, "\"");
-        strcat(buffer, ",");
-    }
-    if (info->info2 == NULL) {
-        strcat(buffer, "info2:\"\",");
-    } else {
-        strcat(buffer, "info2:\"");
-        strcat(buffer, info->info2);
-        strcat(buffer, "\"");
-        strcat(buffer, ",");
-    }
-    if (info->info3 == NULL) {
-        strcat(buffer, "info3:\"\",");
-    } else {
-        strcat(buffer, "info3:\"");
-        strcat(buffer, info->info3);
-        strcat(buffer, "\"");
-        strcat(buffer, ",");
-    }
-    if ((trace.option.use_sourceline == 0) || (info->info->filename == NULL)) {
-        strcat(buffer, "filename:\"\",");
-    } else {
-        strcat(buffer, "filename:\"");
-        strcat(buffer, info->info->filename);
-        strcat(buffer, "\"");
-        strcat(buffer, ",");
-    }
-    if (trace.option.use_sourceline == 1) {
-        snprintf(tmp_buf, MAX_LINE_LEN, "lineno: %d }\n", info->info->lineno);
-    } else {
-        strcat(buffer, "lineno:0 }\n");
-    }
-    
+    if (strcmp(trace.option.output_format, "LJSON") == 0) {
+        snprintf(tmp_buf, MAX_LINE_LEN, "{ id: \"%s\", ", info->id);
+        strcat(buffer, tmp_buf);
+        snprintf(tmp_buf, MAX_LINE_LEN, "pid: %d, ", info->pid);
+        strcat(buffer, tmp_buf);
+        snprintf(tmp_buf, MAX_LINE_LEN, "function: \"%s\", ", info->info->function);
+        strcat(buffer, tmp_buf);
+        snprintf(tmp_buf, MAX_LINE_LEN, "time1_sec: %ld, ", info->time.tv_sec);
+        strcat(buffer, tmp_buf);
+        snprintf(tmp_buf, MAX_LINE_LEN, "time1_nsec: %ld, ", info->time.tv_nsec);
+        strcat(buffer, tmp_buf);
+        snprintf(tmp_buf, MAX_LINE_LEN, "time2_sec: %ld, ", info->timeOfThreadProcess.tv_sec);
+        strcat(buffer, tmp_buf);
+        snprintf(tmp_buf, MAX_LINE_LEN, "time2_nsec: %ld, ", info->timeOfThreadProcess.tv_nsec);
+        strcat(buffer, tmp_buf);
+        if (info->info1 == NULL) {
+            strcat(buffer, "info1:\"\",");
+        } else {
+            strcat(buffer, "info1:\"");
+            strcat(buffer, info->info1);
+            strcat(buffer, "\"");
+            strcat(buffer, ",");
+        }
+        if (info->info2 == NULL) {
+            strcat(buffer, "info2:\"\",");
+        } else {
+            strcat(buffer, "info2:\"");
+            strcat(buffer, info->info2);
+            strcat(buffer, "\"");
+            strcat(buffer, ",");
+        }
+        if (info->info3 == NULL) {
+            strcat(buffer, "info3:\"\",");
+        } else {
+            strcat(buffer, "info3:\"");
+            strcat(buffer, info->info3);
+            strcat(buffer, "\"");
+            strcat(buffer, ",");
+        }
+        if ((trace.option.use_sourceline == 0) || (info->info->filename == NULL)) {
+            strcat(buffer, "filename:\"\",");
+        } else {
+            strcat(buffer, "filename:\"");
+            strcat(buffer, info->info->filename);
+            strcat(buffer, "\"");
+            strcat(buffer, ",");
+        }
+        if (trace.option.use_sourceline == 1) {
+            snprintf(tmp_buf, MAX_LINE_LEN, "lineno: %d }\n", info->info->lineno);
+        } else {
+            strcat(buffer, "lineno:0 }\n");
+        }
+    } else if (strcmp(trace.option.output_format, "CSV") == 0) {
+        snprintf(tmp_buf, MAX_LINE_LEN, "%s, ", info->id);
+        strcat(buffer, tmp_buf);
+        snprintf(tmp_buf, MAX_LINE_LEN, "%d, ", info->pid);
+        strcat(buffer, tmp_buf);
+        snprintf(tmp_buf, MAX_LINE_LEN, "%s, ", info->info->function);
+        strcat(buffer, tmp_buf);
+        snprintf(tmp_buf, MAX_LINE_LEN, "%ld, ", info->time.tv_sec);
+        strcat(buffer, tmp_buf);
+        snprintf(tmp_buf, MAX_LINE_LEN, "%ld, ", info->time.tv_nsec);
+        strcat(buffer, tmp_buf);
+        snprintf(tmp_buf, MAX_LINE_LEN, "%ld, ", info->timeOfThreadProcess.tv_sec);
+        strcat(buffer, tmp_buf);
+        snprintf(tmp_buf, MAX_LINE_LEN, "%ld, ", info->timeOfThreadProcess.tv_nsec);
+        strcat(buffer, tmp_buf);
+        if (info->info1 == NULL) {
+            strcat(buffer, ",");
+        } else {
+            strcat(buffer, info->info1);
+            strcat(buffer, ",");
+        }
+        if (info->info2 == NULL) {
+            strcat(buffer, ",");
+        } else {
+            strcat(buffer, info->info2);
+            strcat(buffer, ",");
+        }
+        if (info->info3 == NULL) {
+            strcat(buffer, ",");
+        } else {
+            strcat(buffer, info->info3);
+            strcat(buffer, ",");
+        }
+        if ((trace.option.use_sourceline == 0) || (info->info->filename == NULL)) {
+            strcat(buffer, ",");
+        } else {
+            strcat(buffer, info->info->filename);
+            strcat(buffer, ",");
+        }
+        if (trace.option.use_sourceline == 1) {
+            snprintf(tmp_buf, MAX_LINE_LEN, "%d\n", info->info->lineno);
+        } else {
+            strcat(buffer, "0\n");
+        }
+    }   
     strcat(buffer, tmp_buf);
 }
 
@@ -638,6 +689,9 @@ int dumpFuncInfo(TRACER_INFO *info)
     print_def_info(buf, info);
     pthread_mutex_unlock(&trace.trace_write_mutex);
     ret = write(fd, buf, strnlen(buf, MAX_LINE_LEN));
+    if (trace.option.use_fsync == 1) {
+        fsync(fd);
+    }
     return ret;
 }
 
@@ -659,7 +713,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     info.pid = syscall(SYS_gettid);
     info.info = getCaller(2);
     info.info1 = buf1;
-    info.info2 = (char *)"pthread_exit";  
+    info.info2 = buf;  
     dumpFuncInfo(&info);
     free(info.info->filename);
     free(info.info->function);

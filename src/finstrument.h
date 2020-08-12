@@ -49,6 +49,8 @@ typedef struct tracer_option {
     int max_ringbufferItemNum;
     int use_sourceline;
     int use_mcheck;
+    int use_fsync;
+    const char *output_format; // LJSON or CSV
 } TRACER_OPTION;
 
 
