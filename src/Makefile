@@ -13,9 +13,12 @@ CPP_LDFLAGS  = -rdynamic -lpthread -ldl -lbacktrace -lconfuse -L.
 SHARED_LDFLAGS= -shared -fPIC -lpthread -lbacktrace -ldl -lconfuse -luuid -L.
 SHARED_CPP_LDFLAGS= $(SHARED_LDFLAGS) -liberty
 
-all: libtrace.so libtrace++.so
+all: libtrace.so libtrace++.so libwatchalloc.so 
 
 libtrace.so : finstrument.c bt.c
+	$(CC) -g -o $@ $+ $(SHARED_LDFLAGS)
+
+libwatchalloc.so : watchalloc.c base_va.c
 	$(CC) -g -o $@ $+ $(SHARED_LDFLAGS)
 
 libtrace++.so : finstrument.c bt.c
