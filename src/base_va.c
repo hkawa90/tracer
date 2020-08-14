@@ -49,7 +49,6 @@ int getProcessMapInfo(PROCESS_MAP_INFO *map_info)
             continue;
         if (strcmp(map_info[cnt].perms, "r-xp") != 0)
             continue;
-        fprintf(stderr, "%s\n", line);
         cnt++;
         if (cnt == MAX_LIB_NUM)
             break;
@@ -61,7 +60,9 @@ int getProcessMapInfo(PROCESS_MAP_INFO *map_info)
 PROCESS_MAP_INFO *resolveFuncAddress(PROCESS_MAP_INFO *map_info, void *retrun_address)
 {
     int cnt = 0;
-    fprintf(stderr, "resolveFuncAddress[in]\n");
+
+    if (map_info == (PROCESS_MAP_INFO *)NULL)
+        return (PROCESS_MAP_INFO *)NULL;
     for (cnt = 0;; cnt++)
     {
         if ((map_info[cnt].low == 0) && (map_info[cnt].high == 0))
@@ -69,7 +70,6 @@ PROCESS_MAP_INFO *resolveFuncAddress(PROCESS_MAP_INFO *map_info, void *retrun_ad
         if ((map_info[cnt].low <= (unsigned long)retrun_address) &&
             (map_info[cnt].high >= (unsigned long)retrun_address))
         {
-            fprintf(stderr, "resolveFuncAddress[out]\n");
             return &map_info[cnt];
         }
     }
