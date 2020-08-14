@@ -1,6 +1,6 @@
-# Tracer for C Language.
+# Tracer for C/CPP Language.
 
-Cプログラムの関数コール毎にトレース情報を出力します。
+C/CPPプログラムの関数コール毎にトレース情報を出力します。
 
 ## Getting Started
 
@@ -33,9 +33,14 @@ make
 
 ```
 $ ls -l *.so
--rwxrwxr-x 1 kawa90 kawa90 76304  8月 10 17:47 libtrace++.so
--rwxrwxr-x 1 kawa90 kawa90 92936  8月 10 17:47 libtrace.so
+-rwxrwxr-x 1 kawa90 kawa90 176792  8月 14 12:02 libtrace++.so
+-rwxrwxr-x 1 kawa90 kawa90 107864  8月 14 12:02 libtrace.so
+-rwxrwxr-x 1 kawa90 kawa90  30544  8月 14 12:18 libwatchalloc.so
 ```
+
+- libtrace.so C言語用トレーサ
+- libtrace++.so CPP言語用トレーサ(libtrace.soとほぼ同一、関数名のdemangleに対応)
+- libwatchalloc.so malloc/calloc/realloc/freeトレーサー
 
 ## HOW TO
 
@@ -86,25 +91,30 @@ main thread [200]
 export LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH
 ```
 
-プログラムを実行するとカレントディレクトリに関数トレース結果(`trace.dat`)が出力されます。
+プログラムを実行するとカレントディレクトリに関数トレース結果(`trace.dat`)が出力されます。1行単位で1つのトレース情報を表しています。出力形式はJSONっぽいものとCSVです。デフォルトはJSONライク(行単位ではJSON)です。
 
 ```
-I,149620,main,334913,795191868,0,15145689
-I,149621,doSomething,334913,795383725,0,88201
-O,149621,doSomething,334913,795455322,0,160146
-O,149620,main,334913,795555239,0,15301790
+{ "id" : "I", "pid": "199474", "function": "main", "time1_sec": "270959", "time1_nsec": "425916885", "time2_sec": "0", "time2_nsec": "15097166", "info1":"","info2": "","info3": "","filename": "","lineno": "0" }
+{ "id" : "I", "pid": "199475", "function": "doSomething", "time1_sec": "270959", "time1_nsec": "426193207", "time2_sec": "0", "time2_nsec": "182463", "info1":"","info2": "","info3": "","filename": "","lineno": "0" }
+{ "id" : "O", "pid": "199475", "function": "doSomething", "time1_sec": "270959", "time1_nsec": "426261468", "time2_sec": "0", "time2_nsec": "250735", "info1":"","info2": "","info3": "","filename": "","lineno": "0" }
+{ "id" : "O", "pid": "199474", "function": "main", "time1_sec": "270959", "time1_nsec": "426378706", "time2_sec": "0", "time2_nsec": "15252634", "info1":"","info2": "","info3": "","filename": "","lineno": "0" }
+
 ```
 
-関数トレース結果は次のCSV形式となります。
+- id: I(関数突入時)/O(関数脱出時)/E(特定関数コール時)/EI/EO
+- pid: プロセスID
+- function: 関数名
+- time1_sec: 実行時クロック(秒).`CLOCK_MONOTONIC`で取得しています。
+- time1_nsec: 実行時クロック(ナノ秒).`CLOCK_MONOTONIC`で取得しています。
+- time2_sec: 実行時クロック(秒).`CLOCK_THREAD_CPUTIME_ID`で取得しています。
+- time2_nsec: 実行時クロック(ナノ秒).`CLOCK_THREAD_CPUTIME_ID`で取得しています。
+- info1: 各種情報
+- info2: 各種情報
+- info3: 各種情報
+- filename: モジュールパス
+- lineno: ソース行番号
 
-第1カラム:関数突入時は`I`,関数脱出時は`O`となります。
-第2カラム:プロセスID
-第3カラム:関数名
-第4カラム:実行時クロック(秒).`CLOCK_MONOTONIC`で取得しています。
-第5カラム:実行時クロック(ナノ秒).`CLOCK_MONOTONIC`で取得しています。
-第6カラム:実行時クロック(秒).`CLOCK_THREAD_CPUTIME_ID`で取得しています。
-第7カラム:実行時クロック(ナノ秒).`CLOCK_THREAD_CPUTIME_ID`で取得しています。
-
+CSV形式は上記の並び順の内容となります。
 
 ### LD_PRELOADで実行時にsharedライブラリ指定
 
@@ -125,19 +135,31 @@ main thread [200]
 実行結果は動的リンクと異なり、`pthread_create`, `pthread_join`, `exit`, `fork`, `pthread_exit`をhookしてトレース情報を出力します。`pthread_join`は、`pthread_join`開始時は第1カラムは`EI`となり、`pthread_join`完了後は`EO`と表示されます。`pthread_create`,`exit`, `fork`, `pthread_exit`では第1カラムは`E`となります。第8カラムは`pthread_create`と`pthread_join`のときに詳細情報が表示されます。`pthread_create`だけは第8カラムに実行スレッド関数名とスレッドIDが表示され、`pthread_join`ではjoin待ちスレッドIDが表示されます。
 
 ```
-I,150284,main,335466,673478089,0,15534782
-E,150284,main,335466,673615657,0,15678340,pthread_create doSomething 140241503631104
-EI,150284,main,335466,673694612,0,15737977,pthread_join 140241503631104
-I,150285,doSomething,335466,673716569,0,97286
-O,150285,doSomething,335466,673752107,0,132986
-EO,150284,main,335466,673796047,0,15763878,pthread_join 140241503631104
-O,150284,main,335466,673832331,0,15798250
+{ "id" : "I", "pid": "199974", "function": "main", "time1_sec": "271471", "time1_nsec": "219501477", "time2_sec": "0", "time2_nsec": "16647626", "info1":"","info2": "","info3": "","filename": "","lineno": "0" }
+{ "id" : "E", "pid": "199974", "function": "main", "time1_sec": "271471", "time1_nsec": "219611367", "time2_sec": "0", "time2_nsec": "16760603", "info1": "139640149989120","info2": "(0)pthread_create(doSomething,139640149989120)","info3": "","filename": "","lineno": "0" }
+{ "id" : "EI", "pid": "199974", "function": "main", "time1_sec": "271471", "time1_nsec": "219630977", "time2_sec": "0", "time2_nsec": "16780341", "info1": "139640149989120","info2": "pthread_join","info3": "","filename": "","lineno": "0" }
+{ "id" : "I", "pid": "199975", "function": "doSomething", "time1_sec": "271471", "time1_nsec": "219707247", "time2_sec": "0", "time2_nsec": "112784", "info1":"","info2": "","info3": "","filename": "","lineno": "0" }
+{ "id" : "O", "pid": "199975", "function": "doSomething", "time1_sec": "271471", "time1_nsec": "219757420", "time2_sec": "0", "time2_nsec": "163366", "info1":"","info2": "","info3": "","filename": "","lineno": "0" }
+{ "id" : "EO", "pid": "199974", "function": "main", "time1_sec": "271471", "time1_nsec": "219808052", "time2_sec": "0", "time2_nsec": "16803639", "info1": "139640149989120","info2": "(0)pthread_join","info3": "","filename": "","lineno": "0" }
+{ "id" : "O", "pid": "199974", "function": "main", "time1_sec": "271471", "time1_nsec": "219858943", "time2_sec": "0", "time2_nsec": "16854726", "info1":"","info2": "","info3": "","filename": "","lineno": "0" }
 ```
 C++は上記`libtrace.so`を`libtrace++.so`に置き換えて、実行してください。
 
 ### Configuration
 
 `libconfuse`を使った初設定を`racer.conf`ファイルに記述して動作を変更可能です。
+
+設定可能項目は以下の通り。
+
+- use_timestamp: 関数実行時のタイムスタンプを取得する場合は1,そうでない場合は0. デフォルト:1
+- use_cputime:タイムスタンプ取得時にCPU TIMEも取得する場合は1,そうでない場合は0. デフォルト:1
+- use_sourceline: 関数のソースファイル名、行番号を取得する場合は1,そうでない場合は0. デフォルト:0
+- use_mcheck: [GCCのmtrace](https://en.wikipedia.org/wiki/Mtrace)を有効にします。する場合は1,そうでない場合は0. デフォルト:0
+- use_fsync:トレースファイル出力時に[fsync](https://linuxjm.osdn.jp/html/LDP_man-pages/man2/fsync.2.html)を実行する場合は1,そうでない場合は0. デフォルト:0
+- output_format: トレースファイル形式を指定します。LJSON or CSVとします。デフォルト:LJSON
+
+
+記述例：
 
 ```
 # ライン行、モジュールパスをトレース情報に追加します.無効とする場合は0を代入.
@@ -188,10 +210,32 @@ gcc -o sample sample.o -lpthread -ltrace -L.
 
 上記を実行した結果: main関数で5バイトmallocしたことがわかります。
 ```
-I,18027,main,16681,264597108,0,10147387
-E,18027,main,16681,264722077,0,10277895,(0x559f6b15fa50)malloc(5)
-O,18027,main,16681,264791670,0,10346411
+{ "id" : "I", "pid": "201009", "function": "main", "time1_sec": "272269", "time1_nsec": "679372869", "time2_sec": "0", "time2_nsec": "15640034", "info1":"","info2": "","info3": "","filename": "","lineno": "0" }
+{ "id" : "E", "pid": "201009", "function": "main", "time1_sec": "272269", "time1_nsec": "679432461", "time2_sec": "0", "time2_nsec": "15702937", "info1":"","info2": "(0x5609732a2c10)malloc(5)","info3": "","filename": "","lineno": "0" }
+{ "id" : "O", "pid": "201009", "function": "main", "time1_sec": "272269", "time1_nsec": "679447445", "time2_sec": "0", "time2_nsec": "15718176", "info1":"","info2": "","info3": "","filename": "","lineno": "0" }
+```
 
+`libwatchalloc.so`は動的リンクしなくとも、`dlsym`を使ったhookを行うことで、ソースコード変更なく実行できます。
+
+```
+LD_PRELOAD=./libwatchalloc.so ./s
+cat memtrace.log
+sample[115f] malloc(0x5) = 0x556957c24890
+allocated size = 5
+```
+トレースファイル名はデフォルトはカレントの`memtrace.log`で環境変数`MEM_TRACE_LOG`で示されたファイル名となります。
+
+ログ内容は次の書式で、`allocated size`はmalloc,realloc,callocした合計サイズです。
+```
+プロセス[関数アドレス] メモリ管理関数(引数の値,...) = 戻り値
+```
+関数アドレスから実際の関数名を求めるには`addr2line`コマンドを使用します。
+
+実行例：
+```
+addr2line -e ./sample 
+main
+/home/hoge/tracer/src/./sample.c:9
 ```
 
 ## License
@@ -204,4 +248,5 @@ This project is licensed under the MIT License - see the [LICENSE](../LICENSE) f
 - [x] Add module path to trace.dat
 - [x] Add event output
 - [x] Allocaton history
+- [ ] Rotate trace log file
 - [ ] Test

@@ -25,8 +25,6 @@ extern "C"
 #include <pthread.h>
 #include <uuid/uuid.h>
 #include <dlfcn.h>
-#ifdef __cplusplus
-#endif
 
 #ifndef FINSTRUMENT_H
 #define FINSTRUMENT_H
@@ -50,7 +48,7 @@ typedef struct tracer_option {
     int use_sourceline;
     int use_mcheck;
     int use_fsync;
-    const char *output_format; // LJSON or CSV
+    char *output_format; // LJSON or CSV
 } TRACER_OPTION;
 
 
@@ -210,6 +208,8 @@ extern void *tracer_malloc(size_t size);
 #define free(ptr)       tracer_free(ptr)
 #define calloc(size)    tracer_calloc(size)
 #define realloc(size)   tracer_realloc(size)
+#define strdup(s)       tracer_strdup(s)
+#define strndup(s, n)   tracer_strndup(s, n)
 #endif //REPLACE_GLIBC_ALLOC_FUNCS
 
 #endif // FINSTRUMENT_H
