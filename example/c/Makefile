@@ -4,15 +4,15 @@
 
 CC = gcc
 RM = rm
-MV = mv
+MV = mv -f
 
-OBJS= hello.o fork.o pthread.o
 INSTRUMENT_CFLAGS = -finstrument-functions
 INSTRUMENT_LDFLAGS= -ldl -rdynamic
 CFLAGS = -g $(INSTRUMENT_CFLAGS)
 LDFLAGS= $(INSTRUMENT_LDFLAGS)
+LDFLAGS_DL= $(INSTRUMENT_LDFLAGS) -ltrace -L../../src
 
-all: hello fork pthread parser test
+all: hello fork pthread parser tracer_event
 
 hello: hello.c
 	$(CC) -o $@ $+ $(CFLAGS) $(LDFLAGS)
@@ -22,6 +22,9 @@ fork: fork.c
 
 pthread: pthread.c
 	$(CC) -o $@ $+ $(CFLAGS)  $(LDFLAGS) -lpthread
+
+tracer_event: tracer_event.c
+	$(CC) -o $@ $+ $(CFLAGS)  $(LDFLAGS_DL)
 
 %.o: %.y
 
@@ -45,7 +48,9 @@ test:
 	$(MV) trace.dat pthread.dat
 	LD_PRELOAD=../../src/libtrace.so ./parser < sample.txt
 	$(MV) trace.dat parser.dat
+	LD_LIBRARY_PATH=../../src:$LD_LIBRARY_PATH ./tracer_event
+	$(MV) trace.dat tracer_event.dat
 
 clean:
-	$(RM) -f $(OBJS) parser.tab.c parser.tab.h
-	$(RM) -f $(OBJS:%.o=%) parser trace.dat
+	$(RM) -f $(OBJS) parser.tab.c parser.tab.h lex.yy.c
+	$(RM) -f $(OBJS:%.o=%) parser *.dat
