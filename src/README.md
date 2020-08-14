@@ -247,6 +247,6 @@ This project is licensed under the MIT License - see the [LICENSE](../LICENSE) f
 - [x] Add line number to trace.dat
 - [x] Add module path to trace.dat
 - [x] Add event output
-- [x] Allocaton history
+- [ ] Allocaton history
 - [ ] Rotate trace log file
 - [ ] Test
