@@ -49,6 +49,9 @@ typedef struct tracer_option {
     int use_mcheck;
     int use_fsync;
     char *output_format; // LJSON or CSV
+    int use_rotation_log;
+    int max_rotation_log;
+    long max_rotation_file_size;
 } TRACER_OPTION;
 
 

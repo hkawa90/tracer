@@ -2,19 +2,20 @@
 #ifdef __cplusplus
 extern "C"
 {
-    #endif
+#endif
 
-    #include <stdio.h>
-    #include <stdlib.h>
-    #include <limits.h>
-    #include <sys/stat.h>
-    #include <confuse.h>
-    #include <mcheck.h>
-    #include <string.h>
-    #include "finstrument.h"
-    #include "bt.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
+#include <sys/stat.h>
+#include <confuse.h>
+#include <mcheck.h>
+#include <string.h>
+#include "finstrument.h"
+#include "bt.h"
+#include "logger.h"
 
-    #ifdef __cplusplus
+#ifdef __cplusplus
 }
 #endif
 
@@ -28,120 +29,121 @@ static struct hook_funcs funcs;
 extern "C"
 {
 #endif
-typedef struct tracer_info_tag {
-    struct info *info;
-    const char *id;
-    int pid;
-    struct timespec time;
-    struct timespec timeOfThreadProcess;
-    char *info1;
-    char *info2;
-    char *info3;
-} TRACER_INFO;
+    typedef struct tracer_info_tag
+    {
+        struct info *info;
+        const char *id;
+        int pid;
+        struct timespec time;
+        struct timespec timeOfThreadProcess;
+        char *info1;
+        char *info2;
+        char *info3;
+    } TRACER_INFO;
 
-/* Function prototypes with attributes */
-int print_traceinfo(int fd, TRACER_INFO *tr)
-    __attribute__((no_instrument_function));
+    /* Function prototypes with attributes */
+    int print_traceinfo(int fd, TRACER_INFO *tr)
+        __attribute__((no_instrument_function));
 
-void write_traceinfo(struct info *, const char *status)
-    __attribute__((no_instrument_function));
+    void write_traceinfo(struct info *, const char *status)
+        __attribute__((no_instrument_function));
 
-int write_ringbuffer(void *, size_t size)
-    __attribute__((no_instrument_function));
+    int write_ringbuffer(void *, size_t size)
+        __attribute__((no_instrument_function));
 
-void main_constructor(void)
-    __attribute__((no_instrument_function, constructor));
+    void main_constructor(void)
+        __attribute__((no_instrument_function, constructor));
 
-void main_destructor(void)
-    __attribute__((no_instrument_function, destructor));
+    void main_destructor(void)
+        __attribute__((no_instrument_function, destructor));
 
-void __cyg_profile_func_enter(void *, void *)
-    __attribute__((no_instrument_function));
+    void __cyg_profile_func_enter(void *, void *)
+        __attribute__((no_instrument_function));
 
-void __cyg_profile_func_exit(void *, void *)
-    __attribute__((no_instrument_function));
+    void __cyg_profile_func_exit(void *, void *)
+        __attribute__((no_instrument_function));
 
-int changeTraceOption(TRACER_OPTION *tp)
-    __attribute__((no_instrument_function));
+    int changeTraceOption(TRACER_OPTION *tp)
+        __attribute__((no_instrument_function));
 
-int lookupThreadID(int thread_id)
-    __attribute__((no_instrument_function));
+    int lookupThreadID(int thread_id)
+        __attribute__((no_instrument_function));
 
-int writeRingbuffer(int fd)
-    __attribute__((no_instrument_function));
+    int writeRingbuffer(int fd)
+        __attribute__((no_instrument_function));
 
-int push_ringbuffer(RINGBUFFER *ring, void *data, size_t size)
-    __attribute__((no_instrument_function));
+    int push_ringbuffer(RINGBUFFER *ring, void *data, size_t size)
+        __attribute__((no_instrument_function));
 
-void app_signal_handler(int sig, siginfo_t *info, void *ctx)
-    __attribute__((no_instrument_function));
+    void app_signal_handler(int sig, siginfo_t *info, void *ctx)
+        __attribute__((no_instrument_function));
 
-void tracer_backtrack(int fd)
-    __attribute__((no_instrument_function));
+    void tracer_backtrack(int fd)
+        __attribute__((no_instrument_function));
 
-struct info *getCaller(int)
-    __attribute__((no_instrument_function));
+    struct info *getCaller(int)
+        __attribute__((no_instrument_function));
 
-char *resolveFuncName(uintptr_t addr)
-    __attribute__((no_instrument_function));
+    char *resolveFuncName(uintptr_t addr)
+        __attribute__((no_instrument_function));
 
-void print_def_info(char *buffer, TRACER_INFO *info)
-    __attribute__((no_instrument_function));
+    void print_def_info(char *buffer, TRACER_INFO *info)
+        __attribute__((no_instrument_function));
 
-int dumpFuncInfo(TRACER_INFO *info)
-    __attribute__((no_instrument_function));
+    int dumpFuncInfo(TRACER_INFO *info)
+        __attribute__((no_instrument_function));
 
-int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
-    void *(*start_routine)(void *), void *arg)
-    __attribute__((no_instrument_function));
+    int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+                       void *(*start_routine)(void *), void *arg)
+        __attribute__((no_instrument_function));
 
-int pthread_join(pthread_t th, void **thread_return)
-    __attribute__((no_instrument_function));
+    int pthread_join(pthread_t th, void **thread_return)
+        __attribute__((no_instrument_function));
 
-void pthread_exit(void *retval)
-    __attribute__((no_instrument_function, noreturn));
+    void pthread_exit(void *retval)
+        __attribute__((no_instrument_function, noreturn));
 
-void exit(int status)
-    __attribute__((no_instrument_function, noreturn));
+    void exit(int status)
+        __attribute__((no_instrument_function, noreturn));
 
-pid_t fork(void)
-    __attribute__((no_instrument_function));
+    pid_t fork(void)
+        __attribute__((no_instrument_function));
 
-char *strdup(const char *s)
-    __attribute__((no_instrument_function));
+    char *strdup(const char *s)
+        __attribute__((no_instrument_function));
 
-char *strndup(const char *s, size_t n)
-    __attribute__((no_instrument_function));
+    char *strndup(const char *s, size_t n)
+        __attribute__((no_instrument_function));
 
-int isExistFile(const char*)
-    __attribute__((no_instrument_function));
+    int isExistFile(const char *)
+        __attribute__((no_instrument_function));
 
-void *tracer_malloc(size_t size)
-    __attribute__((no_instrument_function));
+    void *tracer_malloc(size_t size)
+        __attribute__((no_instrument_function));
 
-void tracer_free(void *ptr)
-    __attribute__((no_instrument_function));
+    void tracer_free(void *ptr)
+        __attribute__((no_instrument_function));
 
-void *tracer_calloc(size_t nmemb, size_t size)
-    __attribute__((no_instrument_function));
+    void *tracer_calloc(size_t nmemb, size_t size)
+        __attribute__((no_instrument_function));
 
-void *tracer_realloc(void *ptr, size_t size)
-    __attribute__((no_instrument_function));
+    void *tracer_realloc(void *ptr, size_t size)
+        __attribute__((no_instrument_function));
 
-int tracer_event(const char *msg)
-    __attribute__((no_instrument_function));
+    int tracer_event(const char *msg)
+        __attribute__((no_instrument_function));
 
-int tracer_event_in(const char *msg)
-    __attribute__((no_instrument_function));
+    int tracer_event_in(const char *msg)
+        __attribute__((no_instrument_function));
 
-int tracer_event_out(const char *msg)
-    __attribute__((no_instrument_function));
+    int tracer_event_out(const char *msg)
+        __attribute__((no_instrument_function));
 
-int tracer_event_in_r(uuid_t id, const char *msg)
-    __attribute__((no_instrument_function));
+    int tracer_event_in_r(uuid_t id, const char *msg)
+        __attribute__((no_instrument_function));
 
-int tracer_event_out_r(uuid_t id, const char *msg)
-    __attribute__((no_instrument_function));
+    int tracer_event_out_r(uuid_t id, const char *msg)
+        __attribute__((no_instrument_function));
 
 #ifdef __cplusplus
 }
@@ -154,11 +156,12 @@ static TRACER trace;
  *
  * @return 存在したら 0以外、存在しなければ 0
 */
-int isExistFile(const char* path)
+int isExistFile(const char *path)
 {
     struct stat st;
 
-    if (stat(path, &st) != 0) {
+    if (stat(path, &st) != 0)
+    {
         return 0;
     }
     return (st.st_mode & S_IFMT) == S_IFREG;
@@ -201,7 +204,7 @@ int changeTraceOption(TRACER_OPTION *tp)
             trace.ring[i]->itemSize = sizeof(TRACER_INFO);
             trace.ring[i]->top = 0;
             trace.ring[i]->buffer = (void *)realloc(trace.ring[i]->buffer,
-                trace.option.max_ringbufferItemNum * trace.ring[i]->itemSize);
+                                                    trace.option.max_ringbufferItemNum * trace.ring[i]->itemSize);
         }
         // realloc lookup table for seraching thread id
         trace.threadIDTable = (int *)realloc(trace.threadIDTable, sizeof(int) * trace.option.max_threadNum);
@@ -318,7 +321,6 @@ int push_ringbuffer(RINGBUFFER *ring, void *data, size_t size)
 #endif
 }
 
-
 #if 0
 int print_traceinfo(int fd, TRACER_INFO *tr)
 {
@@ -390,31 +392,35 @@ void write_traceinfo(struct info *symbol_info, const char *status)
 void main_constructor(void)
 {
     cfg_opt_t opts[] =
-    {
-        CFG_INT("use_ringbuffer", 0, CFGF_NONE),
-        CFG_INT("use_timestamp", 1, CFGF_NONE),
-        CFG_INT("use_cputime", 1, CFGF_NONE),
-        CFG_INT("use_backtrack", 0, CFGF_NONE),
-        CFG_INT("max_backtrack_num", 10, CFGF_NONE),
-        CFG_INT("max_threadNum", 100, CFGF_NONE),
-        CFG_INT("max_ringbufferItemNum", 100, CFGF_NONE),
-        CFG_INT("use_sourceline", 0, CFGF_NONE),
-        CFG_INT("use_mcheck", 0, CFGF_NONE),
-        CFG_INT("use_fsync", 0, CFGF_NONE),
-        CFG_STR("output_format", "LJSON", CFGF_NONE),
-        CFG_END()
-    };
+        {
+            CFG_INT("use_ringbuffer", 0, CFGF_NONE),
+            CFG_INT("use_timestamp", 1, CFGF_NONE),
+            CFG_INT("use_cputime", 1, CFGF_NONE),
+            CFG_INT("use_backtrack", 0, CFGF_NONE),
+            CFG_INT("max_backtrack_num", 10, CFGF_NONE),
+            CFG_INT("max_threadNum", 100, CFGF_NONE),
+            CFG_INT("max_ringbufferItemNum", 100, CFGF_NONE),
+            CFG_INT("use_sourceline", 0, CFGF_NONE),
+            CFG_INT("use_mcheck", 0, CFGF_NONE),
+            CFG_INT("use_fsync", 0, CFGF_NONE),
+            CFG_STR("output_format", "LJSON", CFGF_NONE),
+            CFG_INT("use_rotation_log", 0, CFGF_NONE),
+            CFG_INT("max_rotation_log", 5, CFGF_NONE),
+            CFG_INT("max_rotation_file_size", 1000000, CFGF_NONE),
+            CFG_END()};
     cfg_t *cfg;
     const char *tracer_conf = getenv("TRACER_CONF");
     struct sigaction sa_sig;
     char buf[MAX_LINE_LEN + 1] = {0};
 
-    if ((tracer_conf == NULL) || (isExistFile(tracer_conf) == 0)) {
+    if ((tracer_conf == NULL) || (isExistFile(tracer_conf) == 0))
+    {
         tracer_conf = TRACE_CONF_PATH;
     }
     memset(&trace, 0, sizeof(TRACER));
     cfg = cfg_init(opts, CFGF_NONE);
-    if (cfg_parse(cfg, tracer_conf) != CFG_PARSE_ERROR) {
+    if (cfg_parse(cfg, tracer_conf) != CFG_PARSE_ERROR)
+    {
         trace.option.use_ringbuffer = cfg_getint(cfg, "use_ringbuffer");
         trace.option.use_timestamp = cfg_getint(cfg, "use_timestamp");
         trace.option.use_cputime = cfg_getint(cfg, "use_cputime");
@@ -426,14 +432,21 @@ void main_constructor(void)
         trace.option.use_mcheck = cfg_getint(cfg, "use_mcheck");
         trace.option.use_fsync = cfg_getint(cfg, "use_fsync");
         trace.option.output_format = cfg_getstr(cfg, "output_format");
-        if (strcmp(trace.option.output_format, "CSV") == 0) {
+        if (strcmp(trace.option.output_format, "CSV") == 0)
+        {
             trace.option.output_format = "CSV";
-        } if (strcmp(trace.option.output_format, "LJSON") == 0) {
+        }
+        if (strcmp(trace.option.output_format, "LJSON") == 0)
+        {
             trace.option.output_format = "LJSON";
         }
+        trace.option.use_rotation_log = cfg_getint(cfg, "use_rotation_log");
+        trace.option.max_rotation_log = cfg_getint(cfg, "max_rotation_log");
+        trace.option.max_rotation_file_size = cfg_getint(cfg, "max_rotation_file_size");
         cfg_free(cfg);
     }
-    else {
+    else
+    {
         trace.option.use_ringbuffer = 0;
         trace.option.use_timestamp = 1;
         trace.option.use_cputime = 1;
@@ -445,8 +458,15 @@ void main_constructor(void)
         trace.option.use_mcheck = 0;
         trace.option.use_fsync = 0;
         trace.option.output_format = "LJSON";
-     }
+        trace.option.use_rotation_log = 0;
+        trace.option.max_rotation_log = 5;
+        trace.option.max_rotation_file_size = 1000000;
+    }
     init_trace_backtrace();
+    if (trace.option.use_rotation_log == 1)
+    {
+        init_logger(trace.option.max_rotation_file_size, trace.option.max_rotation_log, "trace", "dat", S_IWUSR | S_IRUSR);
+    }
 
     funcs.pthread_create = (int (*)(pthread_t *, const pthread_attr_t *, void *(*r)(void *), void *))dlsym(RTLD_NEXT, "pthread_create");
     funcs.pthread_join = (int (*)(pthread_t, void **))dlsym(RTLD_NEXT, "pthread_join");
@@ -455,12 +475,18 @@ void main_constructor(void)
     funcs.fork = (pid_t(*)(void))dlsym(RTLD_NEXT, "fork");
 
     changeTraceOption(&trace.option);
-
-    fd = open(TRACE_FILE_PATH, O_WRONLY | O_CREAT | O_TRUNC, S_IWUSR | S_IRUSR);
-    if (fd < 0)
+    if (trace.option.use_rotation_log == 1)
     {
-        fprintf(stderr, "Error: open(%d) %s\n", errno, strerror(errno));
-        exit(-1);
+        open_logger();
+    }
+    else
+    {
+        fd = open(TRACE_FILE_PATH, O_WRONLY | O_CREAT | O_TRUNC, S_IWUSR | S_IRUSR);
+        if (fd < 0)
+        {
+            fprintf(stderr, "Error: open(%d) %s\n", errno, strerror(errno));
+            exit(-1);
+        }
     }
 
     memset(&sa_sig, 0, sizeof(sa_sig));
@@ -473,7 +499,8 @@ void main_constructor(void)
     }
     pthread_mutex_init(&trace.trace_write_mutex, NULL);
     pthread_mutex_init(&trace.trace_lookup_mutex, NULL);
-    if (trace.option.use_mcheck == 1) {
+    if (trace.option.use_mcheck == 1)
+    {
         mtrace();
     }
 }
@@ -485,8 +512,16 @@ void main_constructor(void)
  */
 void main_deconstructor(void)
 {
-    close(fd);
-    if (trace.option.use_mcheck == 1) {
+    if (trace.option.use_rotation_log == 1)
+    {
+        close_logger();
+    }
+    else
+    {
+        close(fd);
+    }
+    if (trace.option.use_mcheck == 1)
+    {
         muntrace();
     }
 }
@@ -540,7 +575,8 @@ struct info *getCaller(int depth)
 
 #ifdef __cplusplus
     demangledStr = cplus_demangle(retVal->function, 0);
-    if (demangledStr != NULL) {
+    if (demangledStr != NULL)
+    {
         free(retVal->function);
         retVal->function = demangledStr;
     }
@@ -552,7 +588,7 @@ struct info *getCaller(int depth)
 char *resolveFuncName(uintptr_t addr)
 {
     struct info symbol_info;
- #ifdef __cplusplus
+#ifdef __cplusplus
     char *demangledStr;
 #endif
 
@@ -560,7 +596,8 @@ char *resolveFuncName(uintptr_t addr)
 
 #ifdef __cplusplus
     demangledStr = cplus_demangle(symbol_info.function, 0);
-    if (demangledStr != NULL) {
+    if (demangledStr != NULL)
+    {
         free(symbol_info.function);
         symbol_info.function = demangledStr;
     }
@@ -573,7 +610,8 @@ void print_def_info(char *buffer, TRACER_INFO *info)
 {
     char tmp_buf[MAX_LINE_LEN + 1] = {0};
     *buffer = 0;
-    if (strcmp(trace.option.output_format, "LJSON") == 0) {
+    if (strcmp(trace.option.output_format, "LJSON") == 0)
+    {
         snprintf(tmp_buf, MAX_LINE_LEN, "{ \"id\" : \"%s\", ", info->id);
         strcat(buffer, tmp_buf);
         snprintf(tmp_buf, MAX_LINE_LEN, "\"pid\": \"%d\", ", info->pid);
@@ -588,44 +626,61 @@ void print_def_info(char *buffer, TRACER_INFO *info)
         strcat(buffer, tmp_buf);
         snprintf(tmp_buf, MAX_LINE_LEN, "\"time2_nsec\": \"%ld\", ", info->timeOfThreadProcess.tv_nsec);
         strcat(buffer, tmp_buf);
-        if (info->info1 == NULL) {
+        if (info->info1 == NULL)
+        {
             strcat(buffer, "\"info1\":\"\",");
-        } else {
+        }
+        else
+        {
             strcat(buffer, "\"info1\": \"");
             strcat(buffer, info->info1);
             strcat(buffer, "\"");
             strcat(buffer, ",");
         }
-        if (info->info2 == NULL) {
+        if (info->info2 == NULL)
+        {
             strcat(buffer, "\"info2\": \"\",");
-        } else {
+        }
+        else
+        {
             strcat(buffer, "\"info2\": \"");
             strcat(buffer, info->info2);
             strcat(buffer, "\"");
             strcat(buffer, ",");
         }
-        if (info->info3 == NULL) {
+        if (info->info3 == NULL)
+        {
             strcat(buffer, "\"info3\": \"\",");
-        } else {
+        }
+        else
+        {
             strcat(buffer, "\"info3\": \"");
             strcat(buffer, info->info3);
             strcat(buffer, "\"");
             strcat(buffer, ",");
         }
-        if ((trace.option.use_sourceline == 0) || (info->info->filename == NULL)) {
+        if ((trace.option.use_sourceline == 0) || (info->info->filename == NULL))
+        {
             strcat(buffer, "\"filename\": \"\",");
-        } else {
+        }
+        else
+        {
             strcat(buffer, "\"filename\": \"");
             strcat(buffer, info->info->filename);
             strcat(buffer, "\"");
             strcat(buffer, ",");
         }
-        if (trace.option.use_sourceline == 1) {
+        if (trace.option.use_sourceline == 1)
+        {
             snprintf(tmp_buf, MAX_LINE_LEN, "\"lineno\": \"%d\" }\n", info->info->lineno);
-        } else {
+        }
+        else
+        {
             strcat(buffer, "\"lineno\": \"0\" }\n");
         }
-    } else if (strcmp(trace.option.output_format, "CSV") == 0) {
+    }
+    else if (strcmp(trace.option.output_format, "CSV") == 0)
+    {
         snprintf(tmp_buf, MAX_LINE_LEN, "%s, ", info->id);
         strcat(buffer, tmp_buf);
         snprintf(tmp_buf, MAX_LINE_LEN, "%d, ", info->pid);
@@ -640,37 +695,52 @@ void print_def_info(char *buffer, TRACER_INFO *info)
         strcat(buffer, tmp_buf);
         snprintf(tmp_buf, MAX_LINE_LEN, "%ld, ", info->timeOfThreadProcess.tv_nsec);
         strcat(buffer, tmp_buf);
-        if (info->info1 == NULL) {
+        if (info->info1 == NULL)
+        {
             strcat(buffer, ",");
-        } else {
+        }
+        else
+        {
             strcat(buffer, info->info1);
             strcat(buffer, ",");
         }
-        if (info->info2 == NULL) {
+        if (info->info2 == NULL)
+        {
             strcat(buffer, ",");
-        } else {
+        }
+        else
+        {
             strcat(buffer, info->info2);
             strcat(buffer, ",");
         }
-        if (info->info3 == NULL) {
+        if (info->info3 == NULL)
+        {
             strcat(buffer, ",");
-        } else {
+        }
+        else
+        {
             strcat(buffer, info->info3);
             strcat(buffer, ",");
         }
-        if ((trace.option.use_sourceline == 0) || (info->info->filename == NULL)) {
+        if ((trace.option.use_sourceline == 0) || (info->info->filename == NULL))
+        {
             strcat(buffer, ",");
-        } else {
+        }
+        else
+        {
             strcat(buffer, info->info->filename);
             strcat(buffer, ",");
         }
-        if (trace.option.use_sourceline == 1) {
+        if (trace.option.use_sourceline == 1)
+        {
             snprintf(tmp_buf, MAX_LINE_LEN, "%d\n", info->info->lineno);
             strcat(buffer, tmp_buf);
-        } else {
+        }
+        else
+        {
             strcat(buffer, "0\n");
         }
-    }   
+    }
 }
 
 int dumpFuncInfo(TRACER_INFO *info)
@@ -693,22 +763,31 @@ int dumpFuncInfo(TRACER_INFO *info)
     }
 #ifdef __cplusplus
     demangledStr = cplus_demangle(info->info->function, 0);
-    if (demangledStr != NULL) {
-      free(info->info->function);
-      info->info->function = demangledStr;
+    if (demangledStr != NULL)
+    {
+        free(info->info->function);
+        info->info->function = demangledStr;
     }
 #endif
     print_def_info(buf, info);
     pthread_mutex_unlock(&trace.trace_write_mutex);
-    ret = write(fd, buf, strnlen(buf, MAX_LINE_LEN));
-    if (trace.option.use_fsync == 1) {
+    if (trace.option.use_rotation_log == 1)
+    {
+        write_logger(buf);
+    }
+    else
+    {
+        ret = write(fd, buf, strnlen(buf, MAX_LINE_LEN));
+    }
+    if (trace.option.use_fsync == 1)
+    {
         fsync(fd);
     }
     return ret;
 }
 
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
-    void *(*start_routine)(void *), void *arg)
+                   void *(*start_routine)(void *), void *arg)
 {
     char buf[MAX_LINE_LEN + 1] = {0};
     char buf1[MAX_LINE_LEN + 1] = {0};
@@ -725,7 +804,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     info.pid = syscall(SYS_gettid);
     info.info = getCaller(2);
     info.info1 = buf1;
-    info.info2 = buf;  
+    info.info2 = buf;
     dumpFuncInfo(&info);
     free(info.info->filename);
     free(info.info->function);
@@ -775,7 +854,7 @@ void pthread_exit(void *retval)
     info.id = "E";
     info.pid = syscall(SYS_gettid);
     info.info = getCaller(2);
-    info.info2 = (char *)"pthread_exit";  
+    info.info2 = (char *)"pthread_exit";
     dumpFuncInfo(&info);
     free(info.info->filename);
     free(info.info->function);
@@ -794,7 +873,7 @@ void exit(int status)
     info.id = "E";
     info.pid = syscall(SYS_gettid);
     info.info = getCaller(2);
-    info.info2 = buf;  
+    info.info2 = buf;
     dumpFuncInfo(&info);
     free(info.info->filename);
     free(info.info->function);
@@ -806,19 +885,18 @@ pid_t fork(void)
 {
     char buf[MAX_LINE_LEN + 1] = {0};
     TRACER_INFO info;
- 
+
     memset(&info, 0, sizeof(info));
     info.id = "E";
     info.pid = syscall(SYS_gettid);
     info.info = getCaller(2);
-    info.info2 = (char *)"fork";  
+    info.info2 = (char *)"fork";
     dumpFuncInfo(&info);
     free(info.info->filename);
     free(info.info->function);
     free(info.info);
     return funcs.fork();
 }
-
 
 char *tracer_strdup(const char *s)
 {
@@ -833,7 +911,7 @@ char *tracer_strdup(const char *s)
     info.id = "E";
     info.pid = syscall(SYS_gettid);
     info.info = getCaller(2);
-    info.info2 = buf;  
+    info.info2 = buf;
     dumpFuncInfo(&info);
     free(info.info->filename);
     free(info.info->function);
@@ -854,7 +932,7 @@ char *tracer_strndup(const char *s, size_t n)
     info.id = "E";
     info.pid = syscall(SYS_gettid);
     info.info = getCaller(2);
-    info.info2 = buf;  
+    info.info2 = buf;
     dumpFuncInfo(&info);
     free(info.info->filename);
     free(info.info->function);
@@ -875,7 +953,7 @@ void *tracer_malloc(size_t size)
     info.id = "E";
     info.pid = syscall(SYS_gettid);
     info.info = getCaller(2);
-    info.info2 = buf;  
+    info.info2 = buf;
     dumpFuncInfo(&info);
     free(info.info->filename);
     free(info.info->function);
@@ -894,7 +972,7 @@ void tracer_free(void *ptr)
     info.id = "E";
     info.pid = syscall(SYS_gettid);
     info.info = getCaller(2);
-    info.info2 = buf;  
+    info.info2 = buf;
     dumpFuncInfo(&info);
     free(info.info->filename);
     free(info.info->function);
@@ -915,7 +993,7 @@ void *tracer_calloc(size_t nmemb, size_t size)
     info.id = "E";
     info.pid = syscall(SYS_gettid);
     info.info = getCaller(2);
-    info.info2 = buf;   
+    info.info2 = buf;
     dumpFuncInfo(&info);
     free(info.info->filename);
     free(info.info->function);
@@ -936,7 +1014,7 @@ void *tracer_realloc(void *src, size_t size)
     info.id = "E";
     info.pid = syscall(SYS_gettid);
     info.info = getCaller(2);
-    info.info2 = buf;    
+    info.info2 = buf;
     dumpFuncInfo(&info);
     free(info.info->filename);
     free(info.info->function);
@@ -963,7 +1041,7 @@ int tracer_event(const char *msg)
 int tracer_event_in_r(uuid_t id, const char *msg)
 {
     TRACER_INFO info;
-    char *uuid_str = (char *)malloc(strlen(msg) + 37); 
+    char *uuid_str = (char *)malloc(strlen(msg) + 37);
 
     memset(&info, 0, sizeof(info));
     uuid_generate_time_safe(id);
@@ -985,7 +1063,7 @@ int tracer_event_in_r(uuid_t id, const char *msg)
 int tracer_event_out_r(uuid_t id, const char *msg)
 {
     TRACER_INFO info;
-    char *uuid_str = (char *)malloc(strlen(msg) + 37); 
+    char *uuid_str = (char *)malloc(strlen(msg) + 37);
 
     memset(&info, 0, sizeof(info));
     uuid_unparse_lower(id, uuid_str);

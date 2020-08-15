@@ -15,13 +15,13 @@ SHARED_CPP_LDFLAGS= $(SHARED_LDFLAGS) -liberty
 
 all: libtrace.so libtrace++.so libwatchalloc.so 
 
-libtrace.so : finstrument.c bt.c
+libtrace.so : finstrument.c bt.c logger.c
 	$(CC) -g -o $@ $+ $(SHARED_LDFLAGS)
 
 libwatchalloc.so : watchalloc.c base_va.c
 	$(CC) -g -o $@ $+ $(SHARED_LDFLAGS)
 
-libtrace++.so : finstrument.c bt.c
+libtrace++.so : finstrument.c bt.c logger.c
 	$(CPP) -o $@ $+ $(SHARED_CPP_LDFLAGS)
 
 clean:

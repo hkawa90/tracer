@@ -238,6 +238,8 @@ main
 /home/hoge/tracer/src/./sample.c:9
 ```
 
+もしくは[util](../js/util)の`resolveFunc.js`を使うと同様なことをJavascriptで実行できます。詳細は[README.md](../js/util/README.md)。
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details

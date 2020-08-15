@@ -1,11 +1,10 @@
 #include <stdio.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
 #include <linux/limits.h>
 #include <stdlib.h>
+
+#include "logger.h"
 
 typedef struct logInfo_tag
 {
@@ -15,6 +14,7 @@ typedef struct logInfo_tag
     const char *base_name, *ext_name;
     int fd;
     mode_t mode;
+    ssize_t (*write)(int fd, const void *buf, size_t count);
 } LOG_INFO;
 
 static LOG_INFO logInfo;
@@ -46,7 +46,7 @@ void init_logger(int max_size, int max_rotation, const char *base_name, const ch
  * 通常ファイルかつファイルサイズが0以上を存在するとする
  * @return 存在したら 0以外、存在しなければ 0
 */
-int isExistFile(const char *path)
+static int isExistFile(const char *path)
 {
     mode_t st_mode;
     off_t st_size;
@@ -61,18 +61,6 @@ int isExistFile(const char *path)
     return 0;
 }
 
-int open_logger()
-{
-    char path[PATH_MAX + 1];
-    snprintf(path, PATH_MAX, "%s.%s", logInfo.base_name, logInfo.ext_name);
-    if (isExistFile(path) != 0)
-    {
-        rotation_logger();
-    }
-    logInfo.fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, logInfo.mode);
-    logInfo.current_size = 0;
-    return logInfo.fd;
-}
 
 char *rotation_filename(const char *basename, const char *extname, int number, int max_number)
 {
@@ -115,6 +103,20 @@ int rotation_logger()
         free(path);
         free(path_src);
     }
+    return 0;
+}
+
+int open_logger()
+{
+    char path[PATH_MAX + 1];
+    snprintf(path, PATH_MAX, "%s.%s", logInfo.base_name, logInfo.ext_name);
+    if (isExistFile(path) != 0)
+    {
+        rotation_logger();
+    }
+    logInfo.fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, logInfo.mode);
+    logInfo.current_size = 0;
+    return logInfo.fd;
 }
 
 int write_logger(const char *msg)
@@ -122,6 +124,8 @@ int write_logger(const char *msg)
     char path[PATH_MAX + 1];
     mode_t st_mode;
     off_t st_size = logInfo.current_size;
+    int ret = 0;
+
     snprintf(path, PATH_MAX, "%s.%s", logInfo.base_name, logInfo.ext_name);
 
     //    if ((file_stat(path, &st_mode, &st_size) == 0) && ((st_mode & S_IFMT) == S_IFREG))
@@ -131,15 +135,16 @@ int write_logger(const char *msg)
             // over size
             rotation_logger();
             open_logger();
-            write(logInfo.fd, msg, strlen(msg));
+            ret = write(logInfo.fd, msg, strlen(msg));
             logInfo.current_size += strlen(msg) + 1;
         }
         else
         {
-            write(logInfo.fd, msg, strlen(msg));
+            ret = write(logInfo.fd, msg, strlen(msg));
             logInfo.current_size += strlen(msg) + 1;
         }
     }
+    return ret;
 }
 
 int close_logger()
@@ -147,6 +152,7 @@ int close_logger()
     return close(logInfo.fd);
 }
 
+#if 0
 main()
 {
     char buf[256];
@@ -161,3 +167,4 @@ main()
         cnt++;
     }
 }
+#endif
