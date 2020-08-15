@@ -28,7 +28,8 @@ function replacer(match, p1, p2, offset, string) {
     let r = r_addr2line.split(' ')[2];
     let sourcePath = r.split(':')[0];
     let lineNo = r.split(':')[1];
-    return [p1, '[', functionName, ']', string.substr(match.length)].join('');
+
+    return [p1, '[', functionName, ']'].join('');
 }
 
 rl.on('line', function (line) {
