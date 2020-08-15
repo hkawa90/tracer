@@ -240,6 +240,23 @@ main
 
 もしくは[util](../js/util)の`resolveFunc.js`を使うと同様なことをJavascriptで実行できます。詳細は[README.md](../js/util/README.md)。
 
+参考までにプログラムが通常終了するケースでは[LeakSanitizer](http://gavinchou.github.io/experience/summary/syntax/gcc-address-sanitizer/)(GCC 4.8 later)を使う方法もあります。
+
+>-fsanitize=leak
+>
+>Enable LeakSanitizer, a memory leak detector. This option only matters for linking of executables and the executable is linked against a library that overrides malloc and other allocator functions. See https://github.com/google/sanitizers/wiki/AddressSanitizerLeakSanitizer for more details. The run-time behavior can be influenced using the LSAN_OPTIONS environment variable. The option cannot be combined with -fsanitize=thread.
+
+```
+==250502==ERROR: LeakSanitizer: detected memory leaks
+
+Direct leak of 5 byte(s) in 1 object(s) allocated from:
+    #0 0x7f20e55f09d1 in malloc (/usr/lib/x86_64-linux-gnu/liblsan.so.0+0xf9d1)
+    #1 0x55b61010015e in main /home/foo/smalloc_leak.c:8
+    #2 0x7f20e54160b2 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x270b2)
+
+SUMMARY: LeakSanitizer: 5 byte(s) leaked in 1 allocation(s).
+```
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details
