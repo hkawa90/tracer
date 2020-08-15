@@ -23,13 +23,13 @@ function replacer(match, p1, p2, offset, string) {
     // p2 is address(11b3)
     // offset is matching offset(0)
     // string is target string(smalloc_leak[11b3] malloc(0x5) = 0x55616343b890)
-    let r_addr2line = addr2func(p1, p2);
+    let r_addr2line = addr2func(p1, p2).split(/\r\n|\r|\n/)[0];
     let functionName = r_addr2line.split(' ')[0];
     let r = r_addr2line.split(' ')[2];
     let sourcePath = r.split(':')[0];
     let lineNo = r.split(':')[1];
 
-    return [p1, '[', functionName, ']'].join('');
+    return [p1, '[', functionName, '(', sourcePath, ':', lineNo, ')]'].join('');
 }
 
 rl.on('line', function (line) {
