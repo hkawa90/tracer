@@ -36,7 +36,7 @@ rl.on('line', function (line) {
     line = line.split(/\r\n|\r|\n/)[0];
     let r = line.match(/([/\w+]*)\[([0-9a-fA-F]+)\]/);
     if (r !== null) {
-        //console.log('Function: ', funcName, ' Source Path: ', module, ' Line Number: ', lineNo);
+
         var result = line.replace(/([/\w+]*)\[([0-9a-fA-F]+)\]/, replacer);
         console.log(result);
     }
