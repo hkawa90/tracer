@@ -1,5 +1,11 @@
 #! /usr/bin/env node
 
+/**
+ * libtrace.so, libtrace++.soの出力したJSON形式からGraphViz用のDOTファイルもしくはJSONファイルを作成します。
+ * Usage:
+ * node bin/index.js -f trace.dat -j # JSONを標準出力へ書き出します
+ * node bin/index.js -f trace.dat    # DOTを標準出力へ書き出します
+ */
 const fs = require('fs');
 const readline = require('readline');
 const commandLineArgs = require('command-line-args');
@@ -10,11 +16,6 @@ const optionDefinitions = [
   {
     name: 'file',
     alias: 'f',
-    type: String
-  },
-  {
-    name: 'exe',
-    alias: 'e',
     type: String
   },
   {
@@ -40,11 +41,11 @@ function isExistFile(file) {
 
 const options = commandLineArgs(optionDefinitions);
 var traceFile = './trace.dat';
-var exeFile = '';
+
 // HELP
 if (options.help) {
+  process.stdout.write('Output DOT/JSON file from trace.dat.');
   process.stdout.write('option list:\n');
-  process.stdout.write(' -e,-exe  file        : specify executable file');
   process.stdout.write(' -f,-file trace.dat   : specify trace file.\n');
   process.stdout.write(' -j,-output_json      : output json.\n');
   process.stdout.write(' -h,-help             : This message.\n');
@@ -58,22 +59,16 @@ if (options.file !== null) {
     process.exit(2);
   }
 }
-if (options.exe !== null) {
-  if (isExistFile(options.exe)) {
-    exeFile = options.exe;
-  } else {
-    process.exit(2);
-  }
-}
 
 rs = fs.createReadStream(traceFile);
 
 var rl = readline.createInterface(rs, {});
 
-ftracer_parse.parseTraceInfoInit(exeFile);
+ftracer_parse.parseTraceInfoInit();
 
 rl.on('line', function(line) {
-  ftracer_parse.parseTraceInfo(line);
+  let data = JSON.parse(line);
+  ftracer_parse.parseTraceInfo(data);
 });
 
 rl.on('close', function() {

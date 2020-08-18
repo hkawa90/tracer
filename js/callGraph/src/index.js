@@ -2,6 +2,7 @@ var currentFunc = [];
 var funcSeries = [];
 var call = [];
 var stack = [];
+var stack_event = [];
 var event = [];
 var exeFile = '';
 var funcID = 0;
@@ -163,36 +164,29 @@ function createTraceInfo()
   obj.avg_cputime.tv_nsec = 0;
   return obj;
 }
-function parseTraceInfoInit(executableFile)
+function parseTraceInfoInit()
 {
   currentFunc = [];
   call = [];
   stack = [];
+  stack_event = [];
   event = [];
   funcSeries = [];
-  exeFile = executableFile;
   funcID = 0;
 }
 
-function addr2func(addr) {
-  var addr2line = sync('addr2line', ['-e', exeFile, '-pf', addr]);
-  return addr2line.stdout.toString().split(' ')[0];
-}
-
-
-function parseTraceInfo(line)
+function parseTraceInfo(data)
 {
-  var words = line.split(/\s+/);
-  var func = addr2func(words[2]);
-  var status = words[0];
-  var threadID = words[1];
+  var func = data.function;
+  var status = data.id;
+  var pID = data.pid;
   var time = {};
   var cputime = {};
   var obj = new Object();
-  time.tv_sec = words[3];
-  time.tv_nsec = words[4];
-  cputime.tv_sec = words[5];
-  cputime.tv_nsec = words[6];
+  time.tv_sec = data.time1_sec;
+  time.tv_nsec = data.time1_nsec;
+  cputime.tv_sec = data.time2_sec;
+  cputime.tv_nsec = data.time2_nsec;
 
   obj.status = status;
   obj.time = {};
@@ -202,45 +196,45 @@ function parseTraceInfo(line)
   obj.cputime.tv_sec = cputime.tv_sec;
   obj.cputime.tv_nsec = cputime.tv_nsec;
 
-  if (currentFunc[threadID] === undefined) {
-    currentFunc[threadID] = '_';
+  if (currentFunc[pID] === undefined) {
+    currentFunc[pID] = '_';
   }
   if (status === 'I') {
-    if (stack[threadID] === undefined) {
-      stack[threadID] = [];
+    if (stack[pID] === undefined) {
+      stack[pID] = [];
     }
-    obj.prevFunc = currentFunc[threadID];
-    stack[threadID].push(obj);
-    if (call[threadID] === undefined) {
-      call[threadID] = [];
+    obj.prevFunc = currentFunc[pID];
+    stack[pID].push(obj);
+    if (call[pID] === undefined) {
+      call[pID] = [];
     }
-    if (call[threadID][currentFunc[threadID] + '->' + func] === undefined) {
-      call[threadID][currentFunc[threadID] + '->' + func] = createTraceInfo();
+    if (call[pID][currentFunc[pID] + '->' + func] === undefined) {
+      call[pID][currentFunc[pID] + '->' + func] = createTraceInfo();
     }
 
-    call[threadID][currentFunc[threadID] + '->' + func].count++;
-    call[threadID][currentFunc[threadID] + '->' + func].start_time.tv_sec = time.tv_sec;
-    call[threadID][currentFunc[threadID] + '->' + func].start_time.tv_nsec = time.tv_nsec;
-    call[threadID][currentFunc[threadID] + '->' + func].start_cputime.tv_sec = cputime.tv_sec;
-    call[threadID][currentFunc[threadID] + '->' + func].start_cputime.tv_nsec = cputime.tv_nsec;
-    currentFunc[threadID] = func;
+    call[pID][currentFunc[pID] + '->' + func].count++;
+    call[pID][currentFunc[pID] + '->' + func].start_time.tv_sec = time.tv_sec;
+    call[pID][currentFunc[pID] + '->' + func].start_time.tv_nsec = time.tv_nsec;
+    call[pID][currentFunc[pID] + '->' + func].start_cputime.tv_sec = cputime.tv_sec;
+    call[pID][currentFunc[pID] + '->' + func].start_cputime.tv_nsec = cputime.tv_nsec;
+    currentFunc[pID] = func;
   } else if (status === 'O') { // status === 'O'
-    var prev = stack[threadID].pop();
+    var prev = stack[pID].pop();
     var diffTime, diffCpuTime;
     var flow = prev.prevFunc + '->' + func;
     diffTime = diff_timespec(prev.time, time);
     diffCpuTime = diff_timespec(prev.cputime, cputime);
-    call[threadID][flow].depth = stack[threadID].length;
-    call[threadID][flow].time = diffTime;
-    call[threadID][flow].cputime = diffCpuTime;
-    call[threadID][flow].sum_time = add_timespec(call[threadID][flow].sum_time, diffTime);
-    call[threadID][flow].sum_cputime = add_timespec(call[threadID][flow].sum_cputime, diffCpuTime);
-    call[threadID][flow].min_time = min_timespec(call[threadID][flow].min_time, diffTime);
-    var s = min_timespec(call[threadID][flow].min_time, diffTime);
+    call[pID][flow].depth = stack[pID].length;
+    call[pID][flow].time = diffTime;
+    call[pID][flow].cputime = diffCpuTime;
+    call[pID][flow].sum_time = add_timespec(call[pID][flow].sum_time, diffTime);
+    call[pID][flow].sum_cputime = add_timespec(call[pID][flow].sum_cputime, diffCpuTime);
+    call[pID][flow].min_time = min_timespec(call[pID][flow].min_time, diffTime);
+    var s = min_timespec(call[pID][flow].min_time, diffTime);
 
-    call[threadID][flow].min_cputime = min_timespec(call[threadID][flow].min_cputime, diffCpuTime);
-    call[threadID][flow].max_time = max_timespec(call[threadID][flow].max_time, diffTime);
-    call[threadID][flow].max_cputime = max_timespec(call[threadID][flow].max_cputime, diffCpuTime);
+    call[pID][flow].min_cputime = min_timespec(call[pID][flow].min_cputime, diffCpuTime);
+    call[pID][flow].max_time = max_timespec(call[pID][flow].max_time, diffTime);
+    call[pID][flow].max_cputime = max_timespec(call[pID][flow].max_cputime, diffCpuTime);
 
     if (funcSeries[func] === undefined) {
       funcSeries[func] = [];
@@ -252,25 +246,34 @@ function parseTraceInfo(line)
     funcInfo.end = time;
     funcInfo.func = func;
     funcInfo.caller = prev.prevFunc;
-    funcInfo.threadID = threadID;
-    funcInfo.depth = stack[threadID].length;
+    funcInfo.PID = pID;
+    funcInfo.depth = stack[pID].length;
     funcSeries[func].push(funcInfo);
-    currentFunc[threadID] = prev.prevFunc;
-  } else if (status === 'E') { // event
-    var comment = words[7];
-    event.psuh({threadID, func, time, cputime, comment});
+    currentFunc[pID] = prev.prevFunc;
+  } else if (status === 'E') { // event for pthread_create, pthread_exit, exit, fork, tracer_strdup, tracer_strndup, tracer_malloc, tracer_free, tracer_calloc, tracer_realloc, 
+    var comment = data.info2;
+    event.push({PID: pID, func, time, cputime, comment});
+  } else if (status === 'EI') { // event for pthread_join
+    if (stack_event[pID] === undefined) {
+      stack_event[pID] = [];
+    }
+  } else if (status === 'EO') { // event for pthread_join
+  } else if (status === 'UE') { // user event for tracer_event
+  } else if (status === 'UEI') { // user range event for tracer_event_in_r, tracer_event_in
+  } else if (status === 'UEO') { // user range event for tracer_event_out_r, tracer_event_out
   }
 }
 
 function printDot(buffer)
 {
+  const regex = /_->/g; // remove pseudo top node
   calc_average();
   if ((buffer === undefined) || (buffer === null))
     buffer = '';
   for (var thread in call) {
     buffer += 'digraph call_graph_'+ thread+' {\n';
     for (var trace in call[thread]) {
-      buffer += '  '+trace+'[label="' + print_time(call[thread][trace].min_time)+','+print_time(call[thread][trace].max_time)+'/' + call[thread][trace].count + '"]\n';
+      buffer += '  '+trace.replace(regex, '')+'[label="' + print_time(call[thread][trace].min_time)+','+print_time(call[thread][trace].max_time)+'/' + call[thread][trace].count + '"]\n';
     }
     buffer += '}\n';
   }
@@ -284,11 +287,11 @@ function printJSON(buffer)
   if ((buffer === undefined) || (buffer === null))
     buffer = '';
   data.call_flow = [];
-  for (var threadID in call) {
-    for (var trace in call[threadID]) {
-      call[threadID][trace].threadID = threadID;
-      call[threadID][trace].flow = trace;
-      data.call_flow.push(call[threadID][trace]);
+  for (var PID in call) {
+    for (var trace in call[PID]) {
+      call[PID][trace].PID = PID;
+      call[PID][trace].flow = trace;
+      data.call_flow.push(call[PID][trace]);
     }
   }
   data.funcSeries = [];

@@ -1,7 +1,7 @@
 Callgraph
 ====
 
-トレース情報からcall graphを作成する。
+トレース情報(trace.dat)からcall graphを作成する。トレース情報は`libtracer.so`, `libtracer.so`から出力されたものが対象です。
 
 ## Description
 
@@ -9,28 +9,27 @@ Callgraph
 ソースコードはJavasciprtで記述されて、node.jsで実行する。
 
 ## Requirement
-Graphviz, Node.js, addr2line(binutils)
+
+Graphviz, Node.js
 
 ## Usage
 ### Create Callgraph
 
-	$ node bin/index.js -e executable_file -f trace.dat | dot -Tpng -Gdpi=200 > g.png
-	$ display g.png
+```
+$ node bin/index.js -f trace.dat | dot -Tpng -Gdpi=200 > g.png
+```
 
 ### Create json file
 
-	$ node bin/index.js -e executable_file -j -f trace.dat | trace.json
-
-## Install
-
-とくに必要なし。
+	$ node bin/index.js -j -f trace.dat | trace.json
 
 ## Licence
 
-Free
+This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details
 
 ## TODO
 
+- [ ] Handle EI, EO, UE, UEI, UEO event
 + [ ] Customize [dot style](https://graphviz.org/doc/info/attrs.html)
   + [ ] default dot style file
   + [ ] user dot style file
