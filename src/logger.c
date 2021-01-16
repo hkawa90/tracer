@@ -83,7 +83,10 @@ int rotation_logger()
     int ret, i = 0;
 
     close(logInfo.fd);
-    snprintf(write_path, PATH_MAX, "%s.%s", logInfo.base_name, logInfo.ext_name);
+    if (logInfo.ext_name == NULL)
+        snprintf(write_path, PATH_MAX, "%s", logInfo.base_name);
+    else
+        snprintf(write_path, PATH_MAX, "%s.%s", logInfo.base_name, logInfo.ext_name);
     for (i = logInfo.max_rotation; i > 0; i--)
     {
         path = rotation_filename(logInfo.base_name, logInfo.ext_name, i, logInfo.max_rotation);

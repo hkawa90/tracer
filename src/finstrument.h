@@ -29,13 +29,6 @@ extern "C"
 #ifndef FINSTRUMENT_H
 #define FINSTRUMENT_H
 
-typedef struct ringbuffer {
-    int itemNumber; //
-    int itemSize;
-    int top;// current position
-    void *buffer;
-} RINGBUFFER;
-
 
 typedef struct tracer_option {
     int use_ringbuffer; // if this option is 1, use ringbuffer. When program exit or receive signal(SIGINT), output ringbuerr contents.
@@ -47,38 +40,22 @@ typedef struct tracer_option {
     int max_ringbufferItemNum;
     int use_sourceline;
     int use_mcheck;
+    int use_core_id;
     int use_fsync;
-    char *output_format; // LJSON or CSV
+    char const*output_format; // LJSON or CSV
     int use_rotation_log;
     int max_rotation_log;
     long max_rotation_file_size;
 } TRACER_OPTION;
 
 
-typedef struct tracer_ {
-    TRACER_OPTION option;
-    RINGBUFFER **ring;
-    int *threadIDTable;
-    int lookupThreadIDNum;
-    pthread_mutex_t trace_write_mutex;
-    pthread_mutex_t trace_lookup_mutex;
-} TRACER;
-
-struct hook_funcs {
-    int (*pthread_create)(pthread_t *, const pthread_attr_t *, void *(*r) (void *), void *);
-    int (*pthread_join)(pthread_t thread, void **retval);
-    void (*exit)(int retval);
-    void (*pthread_exit)(void *retval);
-    pid_t (*fork)(void);
-};
-
-#define TRACE_FILE_PATH	            "trace.dat"
+#define TRACE_FILE_PATH	            "tracer"
 #define TRACE_CONF_PATH	            "tracer.conf"
 #define MAX_BACK_TRACK_NUM			(5)
 #define MAX_LINE_LEN                (1024)
 
-extern void tracer_backtrack(int fd);
-extern int writeRingbuffer(int fd);
+void tracer_backtrack(int fd);
+int writeRingbuffer(int fd);
 /**
  * @fn
  * トレース情報にユーザ指定文字列を出力
@@ -86,7 +63,7 @@ extern int writeRingbuffer(int fd);
  * @param (msg) トレース情報に出力する文字列
  * @return 常に0
  */
-extern int tracer_event(const char *msg);
+int tracer_event(const char *msg);
 /**
  * @fn
  * トレース情報にユーザ指定文字列を出力
@@ -98,7 +75,7 @@ extern int tracer_event(const char *msg);
  * 付加して呼び出すことで、トレース情報の第1カラムに`UEO`を付与され、
  * 第9カラムに引数の文字列が出力される。
  */
-extern int tracer_event_in(const char *msg);
+int tracer_event_in(const char *msg);
 /**
  * @fn
  * トレース情報にユーザ指定文字列を出力
@@ -118,7 +95,7 @@ extern int tracer_event_in(const char *msg);
  * }
  * @endcode
  */
-extern int tracer_event_out(const char *msg);
+int tracer_event_out(const char *msg);
 /**
  * @fn
  * トレース情報にユーザ指定文字列を出力
@@ -142,7 +119,7 @@ extern int tracer_event_out(const char *msg);
  * }
  * @endcode
  */
-extern int tracer_event_in_r(uuid_t id, const char *msg);
+int tracer_event_in_r(uuid_t id, const char *msg);
 /**
  * @fn
  * トレース情報にユーザ指定文字列を出力
@@ -156,7 +133,7 @@ extern int tracer_event_in_r(uuid_t id, const char *msg);
  * 第8カラムにUUIDが出力される。第9カラムに引数の文字列が出力される。
  * UUIDを識別子に対応するtracer_event_in_rと紐付けることができる。
  */
-extern int tracer_event_out_r(uuid_t id, const char *msg);
+int tracer_event_out_r(uuid_t id, const char *msg);
 /**
  * @fn
  * realloc置き換え用関数
@@ -176,7 +153,7 @@ extern int tracer_event_out_r(uuid_t id, const char *msg);
  * }
  * @endcode
  */
-extern void *tracer_realloc(void *ptr, size_t size);
+void *tracer_realloc(void *ptr, size_t size);
 /**
  * @fn
  * calloc置き換え用関数
@@ -185,7 +162,7 @@ extern void *tracer_realloc(void *ptr, size_t size);
  * @details REPLACE_GLIBC_ALLOC_FUNCSを定義して、`finstrument.h`をインクルードする。
  * callocの戻り値、引数がトレース情報に出力される。
  */
-extern void *tracer_calloc(size_t nmemb, size_t size);
+void *tracer_calloc(size_t nmemb, size_t size);
 /**
  * @fn
  * free置き換え用関数
@@ -194,7 +171,7 @@ extern void *tracer_calloc(size_t nmemb, size_t size);
  * @details REPLACE_GLIBC_ALLOC_FUNCSを定義して、`finstrument.h`をインクルードする。
  * freeの戻り値、引数がトレース情報に出力される。
  */
-extern void tracer_free(void *ptr);
+void tracer_free(void *ptr);
 /**
  * @fn
  * malloc置き換え用関数
@@ -203,7 +180,7 @@ extern void tracer_free(void *ptr);
  * @details REPLACE_GLIBC_ALLOC_FUNCSを定義して、`finstrument.h`をインクルードする。
  * mallocの戻り値、引数がトレース情報に出力される。
  */
-extern void *tracer_malloc(size_t size);
+void *tracer_malloc(size_t size);
 
 // REPLACE GLIBC MALLOC 
 #ifdef REPLACE_GLIBC_ALLOC_FUNCS

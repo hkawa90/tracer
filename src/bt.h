@@ -1,3 +1,6 @@
+#ifndef TRACE_BACKTRACE_H
+#define TRACE_BACKTRACE_H
+
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,10 +10,10 @@
 #include <backtrace.h>
 #include <backtrace-supported.h>
 
-#ifndef TRACE_BACKTRACE_H
-#define TRACE_BACKTRACE_H
 
-struct info
+#define MAX_LINE_LEN                (1024)
+
+struct backtrace_info
 {
     char *filename;
     int lineno;
@@ -21,9 +24,9 @@ struct info
 extern "C" {
 #endif
 
-    extern int trace_backtrace(int depth, struct info *symbol_info) __attribute__((no_instrument_function));
-    extern void init_trace_backtrace(void) __attribute__((no_instrument_function));
-    extern int trace_backtrace_pcinfo(uintptr_t addr, struct info *symbol_info) __attribute__((no_instrument_function));
+    int trace_backtrace(int depth, struct backtrace_info *symbol_info) __attribute__((no_instrument_function));
+    void init_trace_backtrace(void) __attribute__((no_instrument_function));
+    int trace_backtrace_pcinfo(uintptr_t addr, struct backtrace_info *symbol_info) __attribute__((no_instrument_function));
 
 #ifdef __cplusplus
 } /* End extern "C".  */

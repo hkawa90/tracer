@@ -17,7 +17,7 @@ cd tracer
 
 ```
 sudo apt-get install libconfuse-dev
-sudo apt-get install llibiberty-dev
+sudo apt-get install libiberty-dev
 sudo apt-get install uuid-dev
 ```
 
@@ -91,7 +91,7 @@ main thread [200]
 export LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH
 ```
 
-プログラムを実行するとカレントディレクトリに関数トレース結果(`trace.dat`)が出力されます。1行単位で1つのトレース情報を表しています。出力形式はJSONっぽいものとCSVです。デフォルトはJSONライク(行単位ではJSON)です。
+プログラムを実行するとカレントディレクトリに関数トレース結果(`tracer`)が出力されます。1行単位で1つのトレース情報を表しています。出力形式はJSONっぽいものとCSVです。デフォルトはJSONライク(行単位ではJSON)です。
 
 ```
 { "id" : "I", "pid": "199474", "function": "main", "time1_sec": "270959", "time1_nsec": "425916885", "time2_sec": "0", "time2_nsec": "15097166", "info1":"","info2": "","info3": "","filename": "","lineno": "0" }
@@ -103,6 +103,7 @@ export LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH
 
 - id: I(関数突入時)/O(関数脱出時)/E(特定関数コール時)/EI/EO
 - pid: プロセスID
+- coreid: CPU Core ID
 - function: 関数名
 - time1_sec: 実行時クロック(秒).`CLOCK_MONOTONIC`で取得しています。
 - time1_nsec: 実行時クロック(ナノ秒).`CLOCK_MONOTONIC`で取得しています。
@@ -114,7 +115,12 @@ export LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH
 - filename: モジュールパス
 - lineno: ソース行番号
 
-CSV形式は上記の並び順の内容となります。
+CSV形式は上記の並び順の内容となります。ログは環境変数`TRACER_LOG'がセットされていると、
+そのパスに出力されます。セットされていない場合はカレントディレクトリに`tracer'として出力されます。
+
+```
+export TRACER_LOG=/tmp/tracer
+```
 
 ### LD_PRELOADで実行時にsharedライブラリ指定
 
@@ -155,6 +161,7 @@ C++は上記`libtrace.so`を`libtrace++.so`に置き換えて、実行してく�
 - use_cputime:タイムスタンプ取得時にCPU TIMEも取得する場合は1,そうでない場合は0. デフォルト:1
 - use_sourceline: 関数のソースファイル名、行番号を取得する場合は1,そうでない場合は0. デフォルト:0
 - use_mcheck: [GCCのmtrace](https://en.wikipedia.org/wiki/Mtrace)を有効にします。する場合は1,そうでない場合は0. デフォルト:0
+- use_core_id: sched_getcpu()で得たCPU Core idを取得する場合は1,そうでない場合は0. デフォルト:0
 - use_fsync:トレースファイル出力時に[fsync](https://linuxjm.osdn.jp/html/LDP_man-pages/man2/fsync.2.html)を実行する場合は1,そうでない場合は0. デフォルト:0
 - output_format: トレースファイル形式を指定します。LJSON or CSVとします。デフォルト:LJSON
 

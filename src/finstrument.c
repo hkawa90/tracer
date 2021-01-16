@@ -1,19 +1,17 @@
-#define _FINSTRUMENT_
+#define _FINSTRUMENT
 #ifdef __cplusplus
 extern "C"
 {
 #endif
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <confuse.h>
-#include <mcheck.h>
-#include <string.h>
 #include "finstrument.h"
+#include "ringbuffer.h"
 #include "bt.h"
 #include "logger.h"
+#include <limits.h>
+#include <confuse.h>
+#include <sched.h>              /* for sched_getcpu */
+#include <mcheck.h>
+#include <string.h>
 
 #ifdef __cplusplus
 }
@@ -23,17 +21,41 @@ extern "C"
 #include <libiberty/demangle.h>
 #endif
 
-static struct hook_funcs funcs;
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
+    typedef struct tracer_ {
+        TRACER_OPTION option;
+        RINGBUFFER **ring;
+        int *threadIDTable;
+        int lookupThreadIDNum;
+        pthread_mutex_t trace_write_mutex;
+        pthread_mutex_t trace_lookup_mutex;
+    } TRACER;
+    
+    struct hook_funcs {
+        int (*pthread_create)(pthread_t *, const pthread_attr_t *, void *(*r) (void *), void *);
+        int (*pthread_join)(pthread_t thread, void **retval);
+        void (*exit)(int retval);
+        void (*pthread_exit)(void *retval);
+        pid_t (*fork)(void);
+    };
+
+    struct info
+    {
+        char filename[MAX_LINE_LEN + 1];
+        int lineno;
+        char function[MAX_LINE_LEN + 1];
+    };
+
     typedef struct tracer_info_tag
     {
-        struct info *info;
+        struct info info;
         const char *id;
         int pid;
+        int core_id;
         struct timespec time;
         struct timespec timeOfThreadProcess;
         char *info1;
@@ -72,16 +94,13 @@ extern "C"
     int writeRingbuffer(int fd)
         __attribute__((no_instrument_function));
 
-    int push_ringbuffer(RINGBUFFER *ring, void *data, size_t size)
-        __attribute__((no_instrument_function));
-
     void app_signal_handler(int sig, siginfo_t *info, void *ctx)
         __attribute__((no_instrument_function));
 
     void tracer_backtrack(int fd)
         __attribute__((no_instrument_function));
 
-    struct info *getCaller(int)
+    void getCaller(struct info *, int)
         __attribute__((no_instrument_function));
 
     char *resolveFuncName(uintptr_t addr)
@@ -101,10 +120,10 @@ extern "C"
         __attribute__((no_instrument_function));
 
     void pthread_exit(void *retval)
-        __attribute__((no_instrument_function, noreturn));
+        __attribute__((no_instrument_function));
 
     void exit(int status)
-        __attribute__((no_instrument_function, noreturn));
+        __attribute__((no_instrument_function));
 
     pid_t fork(void)
         __attribute__((no_instrument_function));
@@ -151,6 +170,9 @@ extern "C"
 
 static int fd;
 static TRACER trace;
+static struct hook_funcs funcs;
+
+#define tracer_getcpu()		((trace.option.use_core_id == 1) ? sched_getcpu() : 0)
 
 /**
  *
@@ -191,21 +213,8 @@ int changeTraceOption(TRACER_OPTION *tp)
     }
     if (trace.option.use_ringbuffer)
     {
-        // realloc ringbuffer
-        trace.ring = (RINGBUFFER **)realloc(trace.ring, sizeof(RINGBUFFER *) * trace.option.max_threadNum);
-        memset(trace.ring, 0, sizeof(RINGBUFFER *) * trace.option.max_threadNum);
-
-        for (i = 0; i < trace.option.max_threadNum; i++)
-        {
-            trace.ring[i] = (RINGBUFFER *)realloc(trace.ring[i], sizeof(RINGBUFFER));
-            memset(trace.ring[i], 0, sizeof(RINGBUFFER));
-
-            trace.ring[i]->itemNumber = trace.option.max_ringbufferItemNum;
-            trace.ring[i]->itemSize = sizeof(TRACER_INFO);
-            trace.ring[i]->top = 0;
-            trace.ring[i]->buffer = (void *)realloc(trace.ring[i]->buffer,
-                                                    trace.option.max_ringbufferItemNum * trace.ring[i]->itemSize);
-        }
+        // TODO realloc
+        initRingbuffer(&trace.ring, trace.option.max_threadNum, trace.option.max_ringbufferItemNum, sizeof(TRACER_INFO));
         // realloc lookup table for seraching thread id
         trace.threadIDTable = (int *)realloc(trace.threadIDTable, sizeof(int) * trace.option.max_threadNum);
         memset(trace.threadIDTable, 0, sizeof(int) * trace.option.max_threadNum);
@@ -229,7 +238,6 @@ void app_signal_handler(int sig, siginfo_t *info, void *ctx)
  */
 int lookupThreadID(int thread_id)
 {
-#if 0
     int i;
 
     pthread_mutex_lock(&trace.trace_lookup_mutex);
@@ -250,7 +258,6 @@ int lookupThreadID(int thread_id)
     trace.lookupThreadIDNum++;
     pthread_mutex_unlock(&trace.trace_lookup_mutex);
     return trace.lookupThreadIDNum - 1;
-#endif
 }
 
 /**
@@ -261,95 +268,34 @@ int lookupThreadID(int thread_id)
  */
 int writeRingbuffer(int fd)
 {
-#if 0
     TRACER_INFO tr;
     int i, j, ret = 0;
 
     for (i = 0; i < trace.lookupThreadIDNum; i++)
     {
-        int next = (trace.ring[i]->top + 1) % trace.option.max_ringbufferItemNum;
-        for (j = next; j < trace.option.max_ringbufferItemNum; j++)
+        TRACER_INFO *ti = (TRACER_INFO *)nthPinter_ringbuffer(trace.ring[i], i);
+        memcpy(&tr, ti, sizeof(TRACER_INFO));
+        if (ti == NULL)
         {
-            TRACER_INFO *ti = (TRACER_INFO *)(trace.ring[i]->buffer) + trace.ring[i]->itemSize * j;
-            memcpy(&tr, ti, sizeof(TRACER_INFO));
-            tr.func = strdup(ti->func);
-            if (ti == NULL)
-            {
-                continue;
-            }
-            ret = print_traceinfo(fd, &tr);
-            if (ret != 0)
-                break;
+            continue;
         }
-        if (ret != 0)
-            break;
+        ret = print_traceinfo(fd, &tr);
     }
     return ret;
-#endif
 }
 
-/**
- * @brief          push data to ringbuffer
- * @fn             push_ringbuffer
- * @param          (RINGBUFFER *ring) ring buffer
- * @param          (void *data) data
- * @param          (size_t size) write data length.
- * @return         error code.
- */
-int push_ringbuffer(RINGBUFFER *ring, void *data, size_t size)
-{
-#if 0
-    int pos = 0, cur_pos = 0;
-    if (ring->itemSize < size)
-    {
-        return -1;
-    }
-    if (ring->buffer == NULL)
-    {
-        return -2;
-    }
-    pos = ((ring->top + 1) % ring->itemNumber) * ring->itemSize;
-    cur_pos = ((ring->top) % ring->itemNumber) * ring->itemSize;
-    if (((TRACER_INFO *)ring->buffer + cur_pos)->func != NULL) {
-        free(((TRACER_INFO *)ring->buffer + cur_pos)->func);
-        free(((TRACER_INFO *)ring->buffer + cur_pos)->filename);
-    }
-    memcpy((TRACER_INFO *)ring->buffer + pos, data, size);
-    // update top
-    ring->top = (ring->top + 1) % ring->itemNumber;
-    return 0;
-#endif
-}
 
-#if 0
+
 int print_traceinfo(int fd, TRACER_INFO *tr)
 {
     int err;
     char buf[MAX_LINE_LEN + 1] = {0};
 
-    snprintf(buf, MAX_LINE_LEN, "%c,%d,%s,%ld,%ld,%ld,%ld,,,",
-        tr->status,
-        tr->thread_id,
-        tr->func,
-        tr->time.tv_sec,
-        tr->time.tv_nsec,
-        tr->timeOfThreadProcess.tv_sec,
-        tr->timeOfThreadProcess.tv_nsec);
-    if (trace.option.use_sourceline == 1) {
-        char lineNoStr[MAX_LINE_LEN + 1];
-        strncat(buf, ",", MAX_LINE_LEN);
-        strncat(buf, tr->filename, MAX_LINE_LEN);
-        strncat(buf, ",", MAX_LINE_LEN);
-        snprintf(lineNoStr, MAX_LINE_LEN, "%d", tr->lineNum);
-        strncat(buf, lineNoStr, MAX_LINE_LEN);
-    }
-    strncat(buf, "\n", MAX_LINE_LEN);
+    print_def_info(buf, tr);
     err = write(fd, buf, strnlen(buf, MAX_LINE_LEN));
-    free(tr->filename);
-    free(tr->func);
     return err;
 }
-#endif
+
 
 /**
  * @brief          push trace information to ringbuffer
@@ -369,20 +315,35 @@ void write_traceinfo(struct info *symbol_info, const char *status)
 
     memset(&tr, 0, sizeof(tr));
     tr.pid = syscall(SYS_gettid);
+    tr.core_id = tracer_getcpu();
     tr.id = status;
-    tr.info = symbol_info;
-
+    memcpy(&tr.info, symbol_info, sizeof(struct info));
+    if (trace.option.use_timestamp == 1)
+    {
+        if (trace.option.use_cputime == 1)
+        {
+            clock_gettime(CLOCK_THREAD_CPUTIME_ID, &tr.timeOfThreadProcess);
+        }
+        clock_gettime(CLOCK_MONOTONIC, &tr.time);
+    }
+#ifdef __cplusplus
+    demangledStr = cplus_demangle(tr.info.function, 0);
+    if (demangledStr != NULL)
+    {
+        strcpy(tr.info.function, demangledStr);
+    }
+#endif
     if (trace.option.use_ringbuffer == 1)
     {
-#if 0
-        push_ringbuffer(trace.ring[lookupThreadID(tr.thread_id)], &tr, sizeof(tr));
-#endif
+        int thread_id = syscall(SYS_gettid);
+        push_ringbuffer(trace.ring[lookupThreadID(thread_id)], &tr);
     }
     else
     {
         dumpFuncInfo(&tr);
     }
 }
+
 
 /**
  * @brief          constructor of main function
@@ -402,6 +363,7 @@ void main_constructor(void)
             CFG_INT("max_ringbufferItemNum", 100, CFGF_NONE),
             CFG_INT("use_sourceline", 0, CFGF_NONE),
             CFG_INT("use_mcheck", 0, CFGF_NONE),
+            CFG_INT("use_core_id", 0, CFGF_NONE),
             CFG_INT("use_fsync", 0, CFGF_NONE),
             CFG_STR("output_format", "LJSON", CFGF_NONE),
             CFG_INT("use_rotation_log", 0, CFGF_NONE),
@@ -410,12 +372,17 @@ void main_constructor(void)
             CFG_END()};
     cfg_t *cfg;
     const char *tracer_conf = getenv("TRACER_CONF");
+    const char *tracer_log = getenv("TRACER_LOG");
     struct sigaction sa_sig;
     char buf[MAX_LINE_LEN + 1] = {0};
 
     if ((tracer_conf == NULL) || (isExistFile(tracer_conf) == 0))
     {
         tracer_conf = TRACE_CONF_PATH;
+    }
+    if (tracer_log == NULL)
+    {
+        tracer_log = TRACE_FILE_PATH;
     }
     memset(&trace, 0, sizeof(TRACER));
     cfg = cfg_init(opts, CFGF_NONE);
@@ -430,6 +397,7 @@ void main_constructor(void)
         trace.option.max_ringbufferItemNum = cfg_getint(cfg, "max_ringbufferItemNum");
         trace.option.use_sourceline = cfg_getint(cfg, "use_sourceline");
         trace.option.use_mcheck = cfg_getint(cfg, "use_mcheck");
+        trace.option.use_core_id = cfg_getint(cfg, "use_core_id");
         trace.option.use_fsync = cfg_getint(cfg, "use_fsync");
         trace.option.output_format = cfg_getstr(cfg, "output_format");
         if (strcmp(trace.option.output_format, "CSV") == 0)
@@ -449,6 +417,7 @@ void main_constructor(void)
     {
         trace.option.use_ringbuffer = 0;
         trace.option.use_timestamp = 1;
+        trace.option.use_core_id = 0;
         trace.option.use_cputime = 1;
         trace.option.use_backtrack = 0;
         trace.option.max_backtrack_num = 10;
@@ -465,7 +434,8 @@ void main_constructor(void)
     init_trace_backtrace();
     if (trace.option.use_rotation_log == 1)
     {
-        init_logger(trace.option.max_rotation_file_size, trace.option.max_rotation_log, "trace", "dat", S_IWUSR | S_IRUSR);
+        // TODO tracer_log
+        init_logger(trace.option.max_rotation_file_size, trace.option.max_rotation_log, tracer_log, "", S_IWUSR | S_IRUSR);
     }
 
     funcs.pthread_create = (int (*)(pthread_t *, const pthread_attr_t *, void *(*r)(void *), void *))dlsym(RTLD_NEXT, "pthread_create");
@@ -481,7 +451,7 @@ void main_constructor(void)
     }
     else
     {
-        fd = open(TRACE_FILE_PATH, O_WRONLY | O_CREAT | O_TRUNC, S_IWUSR | S_IRUSR);
+        fd = open(tracer_log, O_WRONLY | O_CREAT | O_TRUNC, S_IWUSR | S_IRUSR);
         if (fd < 0)
         {
             fprintf(stderr, "Error: open(%d) %s\n", errno, strerror(errno));
@@ -529,24 +499,29 @@ void main_deconstructor(void)
 void __cyg_profile_func_enter(void *addr, void *callsite)
 {
     struct info symbol_info;
-    trace_backtrace(2, &symbol_info);
+    struct backtrace_info bi;
+
+    trace_backtrace(2, &bi);
+    symbol_info.lineno = bi.lineno;
+    strcpy(symbol_info.filename, bi.filename);
+    strcpy(symbol_info.function, bi.function);
     write_traceinfo(&symbol_info, "I");
-    free(symbol_info.filename);
-    free(symbol_info.function);
 }
 
 void __cyg_profile_func_exit(void *addr, void *callsite)
 {
     struct info symbol_info;
-    trace_backtrace(2, &symbol_info);
+    struct backtrace_info bi;
+
+    trace_backtrace(2, &bi);
+    symbol_info.lineno = bi.lineno;
+    strcpy(symbol_info.filename, bi.filename);
+    strcpy(symbol_info.function, bi.function);
     write_traceinfo(&symbol_info, "O");
-    free(symbol_info.filename);
-    free(symbol_info.function);
 }
 
 void tracer_backtrack(int fd)
 {
-#if 0
     int i;
     int thread_id = syscall(SYS_gettid);
     int idx = lookupThreadID(thread_id);
@@ -561,49 +536,48 @@ void tracer_backtrack(int fd)
             print_traceinfo(fd, ti);
         }
     }
-#endif
 }
 
-struct info *getCaller(int depth)
+void getCaller(struct info * info, int depth)
 {
-    struct info *retVal;
+    struct backtrace_info bi;
 #ifdef __cplusplus
     char *demangledStr;
 #endif
-    retVal = (struct info *)malloc(sizeof(struct info));
-    trace_backtrace(depth + 1, retVal);
-
+    trace_backtrace(depth + 1, &bi);
+    info->lineno = bi.lineno;
+    strcpy(info->function, bi.function);
+    strcpy(info->filename, bi.filename);
 #ifdef __cplusplus
-    demangledStr = cplus_demangle(retVal->function, 0);
+    demangledStr = cplus_demangle(info->function, 0);
     if (demangledStr != NULL)
     {
-        free(retVal->function);
-        retVal->function = demangledStr;
+        strcpy(info->function, demangledStr);
     }
 #endif
-
-    return retVal;
 }
 
 char *resolveFuncName(uintptr_t addr)
 {
     struct info symbol_info;
+    struct backtrace_info bi;
 #ifdef __cplusplus
     char *demangledStr;
 #endif
 
-    trace_backtrace_pcinfo(addr, &symbol_info);
+    trace_backtrace_pcinfo(addr, &bi);
+    symbol_info.lineno = bi.lineno;
+    strcpy(symbol_info.function, bi.function);
+    strcpy(symbol_info.filename, bi.filename);
 
 #ifdef __cplusplus
     demangledStr = cplus_demangle(symbol_info.function, 0);
     if (demangledStr != NULL)
     {
-        free(symbol_info.function);
-        symbol_info.function = demangledStr;
+        strcpy(symbol_info.function, demangledStr);
     }
 #endif
-    free(symbol_info.filename);
-    return symbol_info.function;
+    return strdup(symbol_info.function);
 }
 
 void print_def_info(char *buffer, TRACER_INFO *info)
@@ -616,7 +590,9 @@ void print_def_info(char *buffer, TRACER_INFO *info)
         strcat(buffer, tmp_buf);
         snprintf(tmp_buf, MAX_LINE_LEN, "\"pid\": \"%d\", ", info->pid);
         strcat(buffer, tmp_buf);
-        snprintf(tmp_buf, MAX_LINE_LEN, "\"function\": \"%s\", ", info->info->function);
+        snprintf(tmp_buf, MAX_LINE_LEN, "\"coreid\": \"%d\", ", info->core_id);
+        strcat(buffer, tmp_buf);
+        snprintf(tmp_buf, MAX_LINE_LEN, "\"function\": \"%s\", ", info->info.function);
         strcat(buffer, tmp_buf);
         snprintf(tmp_buf, MAX_LINE_LEN, "\"time1_sec\": \"%ld\", ", info->time.tv_sec);
         strcat(buffer, tmp_buf);
@@ -659,20 +635,20 @@ void print_def_info(char *buffer, TRACER_INFO *info)
             strcat(buffer, "\"");
             strcat(buffer, ",");
         }
-        if ((trace.option.use_sourceline == 0) || (info->info->filename == NULL))
+        if ((trace.option.use_sourceline == 0) || (info->info.filename == NULL))
         {
             strcat(buffer, "\"filename\": \"\",");
         }
         else
         {
             strcat(buffer, "\"filename\": \"");
-            strcat(buffer, info->info->filename);
+            strcat(buffer, info->info.filename);
             strcat(buffer, "\"");
             strcat(buffer, ",");
         }
         if (trace.option.use_sourceline == 1)
         {
-            snprintf(tmp_buf, MAX_LINE_LEN, "\"lineno\": \"%d\" }\n", info->info->lineno);
+            snprintf(tmp_buf, MAX_LINE_LEN, "\"lineno\": \"%d\" }\n", info->info.lineno);
         }
         else
         {
@@ -685,7 +661,9 @@ void print_def_info(char *buffer, TRACER_INFO *info)
         strcat(buffer, tmp_buf);
         snprintf(tmp_buf, MAX_LINE_LEN, "%d, ", info->pid);
         strcat(buffer, tmp_buf);
-        snprintf(tmp_buf, MAX_LINE_LEN, "%s, ", info->info->function);
+        snprintf(tmp_buf, MAX_LINE_LEN, "%d, ", info->core_id);
+        strcat(buffer, tmp_buf);
+        snprintf(tmp_buf, MAX_LINE_LEN, "%s, ", info->info.function);
         strcat(buffer, tmp_buf);
         snprintf(tmp_buf, MAX_LINE_LEN, "%ld, ", info->time.tv_sec);
         strcat(buffer, tmp_buf);
@@ -722,18 +700,18 @@ void print_def_info(char *buffer, TRACER_INFO *info)
             strcat(buffer, info->info3);
             strcat(buffer, ",");
         }
-        if ((trace.option.use_sourceline == 0) || (info->info->filename == NULL))
+        if ((trace.option.use_sourceline == 0) || (info->info.filename == NULL))
         {
             strcat(buffer, ",");
         }
         else
         {
-            strcat(buffer, info->info->filename);
+            strcat(buffer, info->info.filename);
             strcat(buffer, ",");
         }
         if (trace.option.use_sourceline == 1)
         {
-            snprintf(tmp_buf, MAX_LINE_LEN, "%d\n", info->info->lineno);
+            snprintf(tmp_buf, MAX_LINE_LEN, "%d\n", info->info.lineno);
             strcat(buffer, tmp_buf);
         }
         else
@@ -748,27 +726,8 @@ int dumpFuncInfo(TRACER_INFO *info)
     int ret = 0;
     char buf[MAX_LINE_LEN + 1] = {0};
     struct timespec time, timeOfThreadProcess;
-#ifdef __cplusplus
-    char *demangledStr;
-#endif
 
     pthread_mutex_lock(&trace.trace_write_mutex);
-    if (trace.option.use_timestamp == 1)
-    {
-        if (trace.option.use_cputime == 1)
-        {
-            clock_gettime(CLOCK_THREAD_CPUTIME_ID, &info->timeOfThreadProcess);
-        }
-        clock_gettime(CLOCK_MONOTONIC, &info->time);
-    }
-#ifdef __cplusplus
-    demangledStr = cplus_demangle(info->info->function, 0);
-    if (demangledStr != NULL)
-    {
-        free(info->info->function);
-        info->info->function = demangledStr;
-    }
-#endif
     print_def_info(buf, info);
     pthread_mutex_unlock(&trace.trace_write_mutex);
     if (trace.option.use_rotation_log == 1)
@@ -802,13 +761,11 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 
     info.id = "E";
     info.pid = syscall(SYS_gettid);
-    info.info = getCaller(2);
+    info.core_id = tracer_getcpu();
+    getCaller(&info.info, 2);
     info.info1 = buf1;
     info.info2 = buf;
     dumpFuncInfo(&info);
-    free(info.info->filename);
-    free(info.info->function);
-    free(info.info);
     free(start_routine_symbol);
     return ret;
 }
@@ -827,7 +784,8 @@ int pthread_join(pthread_t th, void **thread_return)
 
     info.id = "EI";
     info.pid = syscall(SYS_gettid);
-    info.info = getCaller(2);
+    info.core_id = tracer_getcpu();
+    getCaller(&info.info, 2);
     info.info1 = buf;
     info.info2 = (char *)"pthread_join";
     dumpFuncInfo(&info);
@@ -839,9 +797,6 @@ int pthread_join(pthread_t th, void **thread_return)
     info.id = "EO";
     info.info2 = buf1;
     dumpFuncInfo(&info);
-    free(info.info->filename);
-    free(info.info->function);
-    free(info.info);
     return ret;
 }
 
@@ -853,12 +808,10 @@ void pthread_exit(void *retval)
     memset(&info, 0, sizeof(info));
     info.id = "E";
     info.pid = syscall(SYS_gettid);
-    info.info = getCaller(2);
+    info.core_id = tracer_getcpu();
+    getCaller(&info.info, 2);
     info.info2 = (char *)"pthread_exit";
     dumpFuncInfo(&info);
-    free(info.info->filename);
-    free(info.info->function);
-    free(info.info);
     funcs.pthread_exit(retval);
 }
 
@@ -872,12 +825,10 @@ void exit(int status)
     memset(&info, 0, sizeof(info));
     info.id = "E";
     info.pid = syscall(SYS_gettid);
-    info.info = getCaller(2);
+    info.core_id = tracer_getcpu();
+    getCaller(&info.info, 2);
     info.info2 = buf;
     dumpFuncInfo(&info);
-    free(info.info->filename);
-    free(info.info->function);
-    free(info.info);
     funcs.exit(status);
 }
 
@@ -889,12 +840,10 @@ pid_t fork(void)
     memset(&info, 0, sizeof(info));
     info.id = "E";
     info.pid = syscall(SYS_gettid);
-    info.info = getCaller(2);
+    info.core_id = tracer_getcpu();
+    getCaller(&info.info, 2);
     info.info2 = (char *)"fork";
     dumpFuncInfo(&info);
-    free(info.info->filename);
-    free(info.info->function);
-    free(info.info);
     return funcs.fork();
 }
 
@@ -910,12 +859,10 @@ char *tracer_strdup(const char *s)
 
     info.id = "E";
     info.pid = syscall(SYS_gettid);
-    info.info = getCaller(2);
+    info.core_id = tracer_getcpu();
+    getCaller(&info.info, 2);
     info.info2 = buf;
     dumpFuncInfo(&info);
-    free(info.info->filename);
-    free(info.info->function);
-    free(info.info);
     return ptr;
 }
 
@@ -931,12 +878,10 @@ char *tracer_strndup(const char *s, size_t n)
 
     info.id = "E";
     info.pid = syscall(SYS_gettid);
-    info.info = getCaller(2);
+    info.core_id = tracer_getcpu();
+    getCaller(&info.info, 2);
     info.info2 = buf;
     dumpFuncInfo(&info);
-    free(info.info->filename);
-    free(info.info->function);
-    free(info.info);
     return ptr;
 }
 
@@ -952,12 +897,10 @@ void *tracer_malloc(size_t size)
 
     info.id = "E";
     info.pid = syscall(SYS_gettid);
-    info.info = getCaller(2);
+    info.core_id = tracer_getcpu();
+    getCaller(&info.info, 2);
     info.info2 = buf;
     dumpFuncInfo(&info);
-    free(info.info->filename);
-    free(info.info->function);
-    free(info.info);
     return ptr;
 }
 
@@ -971,12 +914,10 @@ void tracer_free(void *ptr)
 
     info.id = "E";
     info.pid = syscall(SYS_gettid);
-    info.info = getCaller(2);
+    info.core_id = tracer_getcpu();
+    getCaller(&info.info, 2);
     info.info2 = buf;
     dumpFuncInfo(&info);
-    free(info.info->filename);
-    free(info.info->function);
-    free(info.info);
     return free(ptr);
 }
 
@@ -992,12 +933,10 @@ void *tracer_calloc(size_t nmemb, size_t size)
 
     info.id = "E";
     info.pid = syscall(SYS_gettid);
-    info.info = getCaller(2);
+    info.core_id = tracer_getcpu();
+    getCaller(&info.info, 2);
     info.info2 = buf;
     dumpFuncInfo(&info);
-    free(info.info->filename);
-    free(info.info->function);
-    free(info.info);
     return ptr;
 }
 
@@ -1013,12 +952,10 @@ void *tracer_realloc(void *src, size_t size)
 
     info.id = "E";
     info.pid = syscall(SYS_gettid);
-    info.info = getCaller(2);
+    info.core_id = tracer_getcpu();
+    getCaller(&info.info, 2);
     info.info2 = buf;
     dumpFuncInfo(&info);
-    free(info.info->filename);
-    free(info.info->function);
-    free(info.info);
     return ptr;
 }
 
@@ -1029,12 +966,10 @@ int tracer_event(const char *msg)
     memset(&info, 0, sizeof(info));
     info.id = "UE";
     info.pid = syscall(SYS_gettid);
-    info.info = getCaller(2);
+    info.core_id = tracer_getcpu();
+    getCaller(&info.info, 2);
     info.info2 = (char *)msg;
     dumpFuncInfo(&info);
-    free(info.info->filename);
-    free(info.info->function);
-    free(info.info);
     return 0;
 }
 
@@ -1049,13 +984,11 @@ int tracer_event_in_r(uuid_t id, const char *msg)
 
     info.id = "UEI";
     info.pid = syscall(SYS_gettid);
-    info.info = getCaller(2);
+    info.core_id = tracer_getcpu();
+    getCaller(&info.info, 2);
     info.info1 = uuid_str;
     info.info2 = (char *)msg;
     dumpFuncInfo(&info);
-    free(info.info->filename);
-    free(info.info->function);
-    free(info.info);
     free(uuid_str);
     return 0;
 }
@@ -1070,13 +1003,11 @@ int tracer_event_out_r(uuid_t id, const char *msg)
 
     info.id = "UEO";
     info.pid = syscall(SYS_gettid);
-    info.info = getCaller(2);
+    info.core_id = tracer_getcpu();
+    getCaller(&info.info, 2);
     info.info1 = uuid_str;
     info.info2 = (char *)msg;
     dumpFuncInfo(&info);
-    free(info.info->filename);
-    free(info.info->function);
-    free(info.info);
     free(uuid_str);
     return 0;
 }
@@ -1088,12 +1019,10 @@ int tracer_event_in(const char *msg)
     memset(&info, 0, sizeof(info));
     info.id = "UEI";
     info.pid = syscall(SYS_gettid);
-    info.info = getCaller(2);
+    info.core_id = tracer_getcpu();
+    getCaller(&info.info, 2);
     info.info2 = (char *)msg;
     dumpFuncInfo(&info);
-    free(info.info->filename);
-    free(info.info->function);
-    free(info.info);
     return 0;
 }
 
@@ -1104,11 +1033,9 @@ int tracer_event_out(const char *msg)
     memset(&info, 0, sizeof(info));
     info.id = "UEO";
     info.pid = syscall(SYS_gettid);
-    info.info = getCaller(2);
+    info.core_id = tracer_getcpu();
+    getCaller(&info.info, 2);
     info.info2 = (char *)msg;
     dumpFuncInfo(&info);
-    free(info.info->filename);
-    free(info.info->function);
-    free(info.info);
     return 0;
 }
