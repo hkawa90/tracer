@@ -14,22 +14,23 @@ int nextPow2(unsigned int v)
     return v;
 }
 
-void initRingbuffer(RINGBUFFER ***ring, int max_ringNum, int max_ringbufferItemNum, size_t itemSize)
+RINGBUFFER **initRingbuffer(int max_ringNum, int max_ringbufferItemNum, size_t itemSize)
 {
+    RINGBUFFER **p = (RINGBUFFER **)NULL;
     int i;
     
     if (max_ringNum != 0) {
-        // realloc ringbuffer
-        *ring = (RINGBUFFER **)calloc(sizeof(RINGBUFFER *), max_ringNum);
+        p = (RINGBUFFER **)calloc(sizeof(RINGBUFFER *), max_ringNum);
         for (i = 0; i < max_ringNum; i++)
         {
-            (*ring)[i] = (RINGBUFFER *)calloc(sizeof(RINGBUFFER), 1);
-            (*ring)[i]->itemNumber = max_ringbufferItemNum;
-            (*ring)[i]->itemSize = itemSize;
-            (*ring)[i]->top =  (*ring)[i]->bottom = 0;
-            (*ring)[i]->buffer = (void *)calloc(max_ringbufferItemNum , itemSize);
+            p[i] = (RINGBUFFER *)calloc(sizeof(RINGBUFFER), 1);
+            p[i]->itemNumber = max_ringbufferItemNum;
+            p[i]->itemSize = itemSize;
+            p[i]->top =  p[i]->bottom = 0;
+            p[i]->buffer = (void *)calloc(max_ringbufferItemNum , itemSize);
         }
     }
+    return p;
 }
 
 void clear_ringbuffer(RINGBUFFER *ring)
@@ -37,11 +38,11 @@ void clear_ringbuffer(RINGBUFFER *ring)
     ring->top = ring->bottom = ring->dataNum = 0;
 }
 
-void free_ringbuffer(RINGBUFFER *ring)
+void free_ringbuffer(RINGBUFFER **ring)
 {
-    free(ring->buffer);
-    free(ring);
-    ring = (RINGBUFFER *)NULL;
+    free((*ring)->buffer);
+    free(*ring);
+    *ring = (RINGBUFFER *)NULL;
 }
 
 /**

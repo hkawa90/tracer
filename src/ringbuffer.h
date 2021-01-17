@@ -17,9 +17,9 @@ typedef struct ringbuffer {
 } RINGBUFFER;
 
 
-void initRingbuffer(RINGBUFFER ***ring, int max_ringNum, int max_ringbufferItemNum, size_t itemSize) __attribute__((no_instrument_function));
+RINGBUFFER **initRingbuffer(int max_ringNum, int max_ringbufferItemNum, size_t itemSize) __attribute__((no_instrument_function));
 void clear_ringbuffer(RINGBUFFER *ring) __attribute__((no_instrument_function));
-void free_ringbuffer(RINGBUFFER *ring) __attribute__((no_instrument_function));
+void free_ringbuffer(RINGBUFFER **ring) __attribute__((no_instrument_function));
 int push_ringbuffer(RINGBUFFER *ring, void *data) __attribute__((no_instrument_function));
 int pop_ringbuffer(RINGBUFFER *ring, void *data) __attribute__((no_instrument_function));
 void *nthPinter_ringbuffer(RINGBUFFER *ring,int number) __attribute__((no_instrument_function));

@@ -193,32 +193,34 @@ int changeTraceOption(TRACER_OPTION *tp)
 {
     int i;
 
-    memcpy(&trace.option, tp, sizeof(TRACER_OPTION));
     // validation check
-    if (trace.option.max_threadNum < 1)
+    if (tp->max_threadNum < 1)
     {
         return -1;
     }
-    if (trace.option.max_ringbufferItemNum < 1)
+    if (tp->max_ringbufferItemNum < 1)
     {
         return -2;
         ;
     }
-    if (trace.option.use_backtrack)
+    if (tp->use_backtrack)
     {
         trace.option.use_ringbuffer = 1;
-        if (trace.option.max_backtrack_num < MAX_BACK_TRACK_NUM)
-            trace.option.max_backtrack_num = MAX_BACK_TRACK_NUM;
-        trace.option.max_ringbufferItemNum = trace.option.max_backtrack_num;
+        if (tp->max_backtrack_num < MAX_BACK_TRACK_NUM)
+            tp->max_backtrack_num = MAX_BACK_TRACK_NUM;
+        tp->max_ringbufferItemNum = tp->max_backtrack_num;
     }
-    if (trace.option.use_ringbuffer)
+    if (tp->use_ringbuffer)
     {
-        // TODO realloc
-        initRingbuffer(&trace.ring, trace.option.max_threadNum, trace.option.max_ringbufferItemNum, sizeof(TRACER_INFO));
-        // realloc lookup table for seraching thread id
-        trace.threadIDTable = (int *)realloc(trace.threadIDTable, sizeof(int) * trace.option.max_threadNum);
-        memset(trace.threadIDTable, 0, sizeof(int) * trace.option.max_threadNum);
+        if (trace.ring != NULL) {
+            for (i = 0; i < trace.option.max_threadNum; i++)
+                free_ringbuffer(&trace.ring[i]);
+        }
+        trace.ring = initRingbuffer(tp->max_threadNum, tp->max_ringbufferItemNum, sizeof(TRACER_INFO));
+        trace.threadIDTable = (int *)realloc(trace.threadIDTable, sizeof(int) * tp->max_threadNum);
+        memset(trace.threadIDTable, 0, sizeof(int) * tp->max_threadNum);
     }
+    memcpy(&trace.option, tp, sizeof(TRACER_OPTION));
     return 0;
 }
 
@@ -376,6 +378,7 @@ void main_constructor(void)
     struct sigaction sa_sig;
     char buf[MAX_LINE_LEN + 1] = {0};
 
+    trace.ring = (RINGBUFFER **)NULL;
     if ((tracer_conf == NULL) || (isExistFile(tracer_conf) == 0))
     {
         tracer_conf = TRACE_CONF_PATH;
